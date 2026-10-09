@@ -14,10 +14,10 @@ The app is built from `TMessagesProj_App` only. The Huawei, HockeyApp and Standa
 
 ### Secrets
 
-Nothing secret is in the repo. A directory outside it, named by the gradle property `TGFEED_SECRETS_DIR` (relative to the repo root; default `../secrets`, or `../telegram-feed/secrets` when `../secrets` does not exist), holds:
+Nothing secret is committed. The gitignored directory `secrets/` at the repo root (another one is named with the gradle property `TGFEED_SECRETS_DIR`, relative to the repo root) holds:
 
-- `telegram.json` with `TG_API_ID` and `TG_API_HASH`, the file the Flutter app uses. `TMessagesProj/build.gradle` reads it into `BuildConfig.APP_ID` and `BuildConfig.APP_HASH`, which `BuildVars` exposes.
-- `google-services.tgfeed.json`, the `google-services.json` of the Firebase project `tg-feed-a0fce` with an Android client for the package `org.unofficial.telegramfeed`. The google-services gradle plugin is not applied; `TMessagesProj_App/build.gradle` reads the file and sets the string resources the plugin would generate (`google_app_id`, `gcm_defaultSenderId`, `google_api_key`, `project_id` and the rest). The build fails when the file is missing or has no client for the package.
+- `telegram.json` with `TG_API_ID` and `TG_API_HASH`, in the format of the Flutter app's file. `TMessagesProj/build.gradle` reads it into `BuildConfig.APP_ID` and `BuildConfig.APP_HASH`, which `BuildVars` exposes.
+- `google-services.json`, the `google-services.json` of the Firebase project `tg-feed-a0fce` with an Android client for the package `org.unofficial.telegramfeed`. The google-services gradle plugin is not applied; `TMessagesProj_App/build.gradle` reads the file and sets the string resources the plugin would generate (`google_app_id`, `gcm_defaultSenderId`, `google_api_key`, `project_id` and the rest). The build fails when the file is missing or has no client for the package.
 
 The root `build.gradle` holds the directory lookup (`tgfeedSecretsDir`) and the reader (`tgfeedReadSecretJson`).
 

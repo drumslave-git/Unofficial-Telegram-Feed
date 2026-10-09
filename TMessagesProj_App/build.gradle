@@ -31,10 +31,10 @@ android {
     defaultConfig.resValue "string", "tgfeed_account_type", APP_PACKAGE
 
     // TGFEED: Firebase resources from the secrets dir (what the google-services plugin would generate).
-    def tgfeedFirebase = rootProject.ext.tgfeedReadSecretJson("google-services.tgfeed.json")
+    def tgfeedFirebase = rootProject.ext.tgfeedReadSecretJson("google-services.json")
     def tgfeedClient = tgfeedFirebase.client.find { it.client_info?.android_client_info?.package_name == APP_PACKAGE }
     if (tgfeedClient == null) {
-        throw new GradleException("google-services.tgfeed.json has no Android client for the package " + APP_PACKAGE)
+        throw new GradleException("google-services.json has no Android client for the package " + APP_PACKAGE)
     }
     def tgfeedApiKey = tgfeedClient.api_key[0].current_key
     defaultConfig.resValue "string", "google_app_id", tgfeedClient.client_info.mobilesdk_app_id

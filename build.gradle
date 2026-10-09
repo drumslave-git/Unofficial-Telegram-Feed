@@ -54,17 +54,10 @@ subprojects {
     }
 }
 
-// TGFEED: secrets live outside the repo. The gradle property TGFEED_SECRETS_DIR names the directory
-// (relative to the repo root); the default is ../secrets, or ../telegram-feed/secrets when ../secrets
-// does not exist. The directory holds telegram.json (TG_API_ID, TG_API_HASH) and
-// google-services.tgfeed.json (the Firebase config of the package APP_PACKAGE).
-ext.tgfeedSecretsDir = {
-    if (rootProject.hasProperty('TGFEED_SECRETS_DIR')) {
-        return rootProject.file(rootProject.property('TGFEED_SECRETS_DIR'))
-    }
-    def dir = rootProject.file('../secrets')
-    return dir.isDirectory() ? dir : rootProject.file('../telegram-feed/secrets')
-}()
+// TGFEED: secrets live in the gitignored directory secrets/ (another one is named with the gradle
+// property TGFEED_SECRETS_DIR, relative to the repo root). It holds telegram.json (TG_API_ID,
+// TG_API_HASH) and google-services.json (the Firebase config of the package APP_PACKAGE).
+ext.tgfeedSecretsDir = rootProject.file(rootProject.hasProperty('TGFEED_SECRETS_DIR') ? rootProject.property('TGFEED_SECRETS_DIR') : 'secrets')
 ext.tgfeedReadSecretJson = { String name ->
     def f = new File(rootProject.ext.tgfeedSecretsDir, name)
     if (!f.isFile()) {

@@ -1,3 +1,4 @@
+<!-- TGFEED: the account type follows the app package. -->
 <sync-adapter xmlns:android="http://schemas.android.com/apk/res/android"
     android:contentAuthority="com.android.contacts"
-    android:accountType="org.telegram.messenger"/>
+    android:accountType="@string/tgfeed_account_type"/>

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Three channels merging into one feed. Same geometry as app/tool/generate_icons.dart;
+     scaled to stay inside the 66dp safe circle of adaptive icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.82"
+        android:scaleY="0.82"
+        android:translateX="-1">
+        <path
+            android:pathData="M31,35 C50,35 48,54 64,54 M31,54 L78,54 M31,73 C50,73 48,54 64,54 M70,44 L80,54 L70,64"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="7"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M25.5,35 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0 M25.5,54 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0 M25.5,73 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0"
+            android:fillColor="#FFFFFFFF" />
+    </group>
+</vector>

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- TGFEED: the account type and target package follow the app package. -->
 
 <account-authenticator xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accountType="org.telegram.messenger"
+    android:accountType="@string/tgfeed_account_type"
     android:icon="@drawable/ic_launcher_dr"
     android:smallIcon="@drawable/ic_launcher_dr"
     android:label="@string/AppName"

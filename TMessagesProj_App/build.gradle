@@ -27,6 +27,32 @@ android {
 
     defaultConfig.applicationId = APP_PACKAGE
 
+    // TGFEED: the account type of the contacts sync account follows the package.
+    defaultConfig.resValue "string", "tgfeed_account_type", APP_PACKAGE
+
+    // TGFEED: Firebase resources from the secrets dir (what the google-services plugin would generate).
+    def tgfeedFirebase = rootProject.ext.tgfeedReadSecretJson("google-services.tgfeed.json")
+    def tgfeedClient = tgfeedFirebase.client.find { it.client_info?.android_client_info?.package_name == APP_PACKAGE }
+    if (tgfeedClient == null) {
+        throw new GradleException("google-services.tgfeed.json has no Android client for the package " + APP_PACKAGE)
+    }
+    def tgfeedApiKey = tgfeedClient.api_key[0].current_key
+    defaultConfig.resValue "string", "google_app_id", tgfeedClient.client_info.mobilesdk_app_id
+    defaultConfig.resValue "string", "gcm_defaultSenderId", tgfeedFirebase.project_info.project_number
+    defaultConfig.resValue "string", "project_id", tgfeedFirebase.project_info.project_id
+    defaultConfig.resValue "string", "google_api_key", tgfeedApiKey
+    defaultConfig.resValue "string", "google_crash_reporting_api_key", tgfeedApiKey
+    if (tgfeedFirebase.project_info.storage_bucket) {
+        defaultConfig.resValue "string", "google_storage_bucket", tgfeedFirebase.project_info.storage_bucket
+    }
+    if (tgfeedFirebase.project_info.firebase_url) {
+        defaultConfig.resValue "string", "firebase_database_url", tgfeedFirebase.project_info.firebase_url
+    }
+    def tgfeedWebClient = (tgfeedClient.oauth_client ?: []).find { it.client_type == 3 }
+    if (tgfeedWebClient) {
+        defaultConfig.resValue "string", "default_web_client_id", tgfeedWebClient.client_id
+    }
+
     sourceSets.main.jniLibs.srcDirs = ['../TMessagesProj/jni/']
 
     lintOptions {
@@ -68,7 +94,7 @@ android {
             debuggable true
             jniDebuggable true
             signingConfig signingConfigs.debug
-            applicationIdSuffix ".beta"
+            // TGFEED: no ".beta" suffix; debug and release share the package APP_PACKAGE.
             minifyEnabled false
             shrinkResources false
             multiDexEnabled true
@@ -205,4 +231,4 @@ android {
     }
 }
 
-apply plugin: 'com.google.gms.google-services'
+// TGFEED: no google-services plugin; the Firebase resources are set from the secrets dir above.

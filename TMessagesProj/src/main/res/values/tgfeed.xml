@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TGFEED: defaults the app module overrides with resValue. -->
+<resources>
+    <string name="tgfeed_account_type" translatable="false">org.unofficial.telegramfeed</string>
+</resources>

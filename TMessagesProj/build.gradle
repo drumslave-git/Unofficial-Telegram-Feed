@@ -147,6 +147,11 @@ android {
 
         multiDexEnabled true
 
+        // TGFEED: Telegram API credentials come from the secrets dir (see the root build.gradle).
+        def tgfeedTelegram = rootProject.ext.tgfeedReadSecretJson("telegram.json")
+        buildConfigField "int", "APP_ID", Integer.parseInt(tgfeedTelegram.TG_API_ID.toString()).toString()
+        buildConfigField "String", "APP_HASH", "\"" + tgfeedTelegram.TG_API_HASH + "\""
+
         externalNativeBuild {
             cmake {
                 version '3.22.1'
@@ -250,7 +255,7 @@ def getProps(String propName) {
         return "";
     }
 }
-apply plugin: 'com.google.gms.google-services'
+// TGFEED: no google-services plugin; the app module sets the Firebase resources from the secrets dir.
 
 task checkVisibility {
     doFirst {

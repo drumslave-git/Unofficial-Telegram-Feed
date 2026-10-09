@@ -1,31 +1,19 @@
-# Architecture
+# Unofficial Telegram Feed — Architecture
 
-## Build
+## 1. Summary
+
+The app is the official Telegram client for Android (DrKLO/Telegram, 12.10.6) with the fork's code added inside it. The fork keeps Telegram's modules, build and native code and changes as little of Telegram's Java as the three features need. Upstream is merged on every Telegram release.
+
+## 2. Build
 
 The app is built from `TMessagesProj_App` only. The Huawei, HockeyApp and Standalone modules stay in the tree for upstream merges and are not built; they still reference Telegram's own package and Firebase config and do not build with the fork's settings.
-
-### Identity
-
-- Package `org.unofficial.telegramfeed` (`APP_PACKAGE` in `gradle.properties`), the same for debug and release builds: the upstream `.beta` suffix of debug builds is removed in `TMessagesProj_App/build.gradle`. The Java namespace stays `org.telegram.messenger`, so class names in manifests and `LauncherIconController` are unchanged.
-- App name "Unofficial Telegram Feed" (`AppName` in every `values*/strings.xml`; the manifests of `TMessagesProj/config` label the application with it) and launcher label "TG Feed" (`AppLauncherLabel`, set on the launcher activity aliases). Inside the app, Telegram's cloud language packs (`BuildVars.USE_CLOUD_STRINGS`) override `AppName` at run time with "Telegram"; the manifest labels are not affected.
-- Launcher icon: the Flutter app's icon (`telegram-feed/docs/icon.png`) as `ic_launcher` and `ic_launcher_round` in every density, as the adaptive icon (`drawable/tgfeed_icon_background.xml` and `tgfeed_icon_foreground.xml`, copied from the Flutter app's launcher drawables), and as `drawable/ic_launcher_dr` (the icon of notifications' persons and of the sync account). The alternative icons of Settings > Appearance (`icon_2` to `icon_6`) are Telegram's.
-- The contacts sync account type is the package (`@string/tgfeed_account_type`, a `resValue` of the app module, defaulted in `values/tgfeed.xml`), so the fork and the official app install side by side.
-- `BuildVars.SUPPORTS_PASSKEYS` is off; passkeys work only with Telegram's own app ids.
-
-### Secrets
-
-Nothing secret is committed. The gitignored directory `secrets/` at the repo root (another one is named with the gradle property `TGFEED_SECRETS_DIR`, relative to the repo root) holds:
-
-- `telegram.json` with `TG_API_ID` and `TG_API_HASH`, in the format of the Flutter app's file. `TMessagesProj/build.gradle` reads it into `BuildConfig.APP_ID` and `BuildConfig.APP_HASH`, which `BuildVars` exposes.
-- `google-services.json`, the `google-services.json` of the Firebase project `tg-feed-a0fce` with an Android client for the package `org.unofficial.telegramfeed`. The google-services gradle plugin is not applied; `TMessagesProj_App/build.gradle` reads the file and sets the string resources the plugin would generate (`google_app_id`, `gcm_defaultSenderId`, `google_api_key`, `project_id` and the rest). The build fails when the file is missing or has no client for the package.
-
-The root `build.gradle` holds the directory lookup (`tgfeedSecretsDir`) and the reader (`tgfeedReadSecretJson`).
 
 ### Requirements on Windows
 
 - Android SDK at `C:\Users\<user>\AppData\Local\Android\Sdk` (`ANDROID_HOME`), with platform 36, build-tools 36.0.0, CMake 3.22.1 and NDK 27.2.12479018 (`TMessagesProj/build.gradle` pins the NDK; install it with `sdkmanager "ndk;27.2.12479018"`, which itself needs `JAVA_HOME` set to a Java 17 or newer).
 - JDK 17 as `JAVA_HOME`. Gradle 8.13 (the wrapper) does not run on Java 24 or newer: Android Studio's bundled JBR is Java 25 and fails with "Unsupported class file major version 69". The Temurin 17 that Gradle provisioned for the Flutter app, at `C:\Users\<user>\.gradle\jdks\eclipse_adoptium-17-amd64-windows.2`, works.
 - No `local.properties` is needed when `ANDROID_HOME` is set.
+- The `secrets/` directory (section 4).
 
 ### Debug APK
 
@@ -37,7 +25,7 @@ export ANDROID_HOME="C:/Users/<user>/AppData/Local/Android/Sdk"
 
 The APK is `TMessagesProj_App/build/outputs/apk/afat/debug/app.apk` (about 107 MB, all four ABIs). The `afat` flavour is the only one the debug build type accepts (`variantFilter` in `TMessagesProj_App/build.gradle`).
 
-The native part compiles only Telegram's own C++ (`tmessages.49`, about 1730 object files per ABI); ffmpeg, BoringSSL, dav1d, libvpx, opus, tde2e, tlottie and wamr are prebuilt static libraries under `TMessagesProj/jni/prebuild/lib/<abi>`. A clean build of all four ABIs takes 28 minutes on the development machine; Gradle's daemon needs the 8 GB heap set in `gradle.properties`.
+The native part compiles only Telegram's own C++ (`tmessages.49`, about 1730 object files per ABI); ffmpeg, BoringSSL, dav1d, libvpx, opus, tde2e, tlottie and wamr are prebuilt static libraries under `TMessagesProj/jni/prebuild/lib/<abi>`. A clean build of all four ABIs takes 28 minutes on the development machine; a build after a Java or resource change takes one to five minutes. Gradle's daemon needs the 8 GB heap set in `gradle.properties`.
 
 ### Emulator
 
@@ -50,3 +38,43 @@ adb shell monkey -p org.unofficial.telegramfeed -c android.intent.category.LAUNC
 ```
 
 Telegram login on the emulator uses a spare real account on the production DC; the owner of that account types the phone number and code.
+
+## 3. Identity
+
+- Package `org.unofficial.telegramfeed` (`APP_PACKAGE` in `gradle.properties`), the same for debug and release builds: the upstream `.beta` suffix of debug builds is removed in `TMessagesProj_App/build.gradle`. The Java namespace stays `org.telegram.messenger`, so class names in manifests and `LauncherIconController` are unchanged.
+- App name "Unofficial Telegram Feed" (`AppName` in every `values*/strings.xml`; the manifests of `TMessagesProj/config` label the application with it) and launcher label "TG Feed" (`AppLauncherLabel`, set on the launcher activity aliases). Inside the app, Telegram's cloud language packs (`BuildVars.USE_CLOUD_STRINGS`) override `AppName` at run time with "Telegram"; the manifest labels are not affected.
+- Launcher icon: the Flutter app's icon (`telegram-feed/docs/icon.png`) as `ic_launcher` and `ic_launcher_round` in every density, as the adaptive icon (`drawable/tgfeed_icon_background.xml` and `tgfeed_icon_foreground.xml`, copied from the Flutter app's launcher drawables), and as `drawable/ic_launcher_dr` (the icon of notifications' persons and of the sync account). The alternative icons of Settings > Appearance (`icon_2` to `icon_6`) are Telegram's.
+- The contacts sync account type is the package (`@string/tgfeed_account_type`, a `resValue` of the app module, defaulted in `values/tgfeed.xml`), so the fork and the official app install side by side.
+- `BuildVars.SUPPORTS_PASSKEYS` is off; passkeys work only with Telegram's own app ids.
+
+## 4. Secrets
+
+Nothing secret is committed. The gitignored directory `secrets/` at the repo root (another one is named with the gradle property `TGFEED_SECRETS_DIR`, relative to the repo root) holds:
+
+- `telegram.json` with `TG_API_ID` and `TG_API_HASH`, in the format of the Flutter app's file. `TMessagesProj/build.gradle` reads it into `BuildConfig.APP_ID` and `BuildConfig.APP_HASH`, which `BuildVars` exposes.
+- `google-services.json`, the `google-services.json` of the Firebase project `tg-feed-a0fce` with an Android client for the package `org.unofficial.telegramfeed`. The google-services gradle plugin is not applied; `TMessagesProj_App/build.gradle` reads the file and sets the string resources the plugin would generate (`google_app_id`, `gcm_defaultSenderId`, `google_api_key`, `project_id` and the rest). The build fails when the file is missing or has no client for the package.
+
+The root `build.gradle` holds the directory lookup (`tgfeedSecretsDir`) and the reader (`tgfeedReadSecretJson`).
+
+## 5. Code layout
+
+- The fork's own code is in the package `org.unofficial.telegramfeed` under `TMessagesProj/src/main/java`, in the same module as Telegram's code so that it reaches Telegram's controllers, cells and fragments directly. Its resources carry the prefix `tgfeed_`.
+- Every edit to a Telegram file is marked on its changed lines with a `TGFEED` comment (`// TGFEED` in Java and gradle, `<!-- TGFEED -->` in XML), so that `git grep TGFEED` lists every point where the fork touches Telegram and an upstream merge conflict is read in context.
+- The fork's UI strings are in `TMessagesProj/src/main/res/values/strings.xml` (English) and `values-uk/strings.xml` (Ukrainian), among Telegram's strings. Telegram's build plugin (`buildSrc`, `TelegramStringsTask`) packs every string of both files, so the fork's strings need nothing else. Telegram's cloud language packs override only the keys they know; the fork's keys keep their local values in every language.
+
+## 6. Storage
+
+Feeds and rules are stored per account in the fork's own SQLite file, `tgfeed<account>.db` in the app's files directory, next to Telegram's `cache4.db`. Telegram's database is not changed, so an upstream change to its schema never touches the fork's data. Each account's controllers (`FeedsController`, `RulesController`) own that account's file and are created like the other per-account controllers of `AccountInstance`.
+
+## 7. Upstream merges
+
+The remote `upstream` is https://github.com/DrKLO/Telegram.git. On every Telegram release:
+
+1. `git fetch upstream --tags` and `git merge <release tag>` on `master`.
+2. Resolve conflicts; every conflict in a Telegram file is at a `TGFEED` line or next to one.
+3. Update the version lines in `PLAN.md` and this file, rebuild with `tool/ci.sh`, and do a hands-on pass on the emulator: login, chat list, the Feeds tab, a feed, a rule notification, read aloud, the stories switch.
+4. Commit the merge as `chore: merge Telegram <version>`.
+
+## 8. Tests and CI
+
+`tool/ci.sh` builds the debug APK and runs the JVM unit tests of the app module, and exits with the first failing step's code; it needs `JAVA_HOME` and `ANDROID_HOME` as in section 2. `TMessagesProj_AppTests` holds Telegram's instrumented tests and is not run.

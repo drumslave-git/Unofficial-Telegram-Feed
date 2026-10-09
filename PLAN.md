@@ -4,13 +4,12 @@ Open work only. A task leaves this file in the commit that finishes it; `git log
 
 Legend: `[ ]` not started, `[~]` in progress (name the branch).
 
-**Current phase:** P0 — Repo and build. **Next task:** P0-3.
+**Current phase:** P0 — Repo and build. **Next task:** P0-4.
 
 The fork of the official Telegram Android client (DrKLO/Telegram, 12.10.6) that takes over three features of the Flutter app `telegram-feed`: feeds that group channels into one timeline, keyword rules per channel that decide which posts notify and are read aloud, and a switch that hides stories. Everything else stays as the official app has it. Each phase from P1 on ends with a tagged release.
 
 ## P0 — Repo and build
 
-- [ ] P0-3 Working conventions. `CLAUDE.md` adapted from `telegram-feed` (session start and end, emulator only, spare account, secrets never committed, docs are facts only, one commit per task with task id, every new UI string in `values/strings.xml` and `values-uk/strings.xml`). `docs/SPEC.md` with the decision table and the user stories of the three features, taking the wording from `telegram-feed/docs/SPEC.md` where the behaviour is the same. The decision table states: feeds are the app's own entity per account, not Telegram folders; feeds live in a "Feeds" tab in the chat list's tab bar; a rule belongs to one channel and may be scoped by a feed; a channel with at least one enabled rule notifies only when a rule matches, channels without rules keep Telegram's behaviour; the stories switch hides every trace of stories; feeds and rules are stored locally per account, with no sync; push comes through the Flutter app's Firebase project; GitHub Releases APKs, Google Play later; upstream is tracked and merged on every Telegram release. `docs/ARCHITECTURE.md`: build recipe, where the fork's code lives (new code in the package `org.unofficial.telegramfeed` inside `TMessagesProj`; every edit to a Telegram file is marked with a `// TGFEED` comment so merges find it), the storage (one SQLite file per account for feeds and rules, separate from Telegram's database), the upstream merge procedure (`upstream` remote = DrKLO/Telegram, merge the release tag, rebuild, run `tool/ci.sh`, hands-on pass). `README.md` rewritten: what the app is, that it is unofficial, GPL-3.0, how to build. `tool/ci.sh`: debug build, unit tests, with the exit code.
 - [ ] P0-4 CI. GitHub Actions: `ci.yml` builds the debug APK and runs the tests on every push; `release.yml` builds a signed release APK on a tag from the keystore, `api_id`/`api_hash` and `google-services.json` secrets, as `telegram-feed/.github/workflows/release.yml` does, and fails without the Firebase secret.
 - [ ] P0-5 Unit-test module. A plain JVM test module (JUnit) for the fork's own code (rule engine, feed merge order, filters); `TMessagesProj_AppTests` holds Telegram's instrumented tests and is left as it is.
 

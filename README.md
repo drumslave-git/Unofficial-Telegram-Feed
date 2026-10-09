@@ -12,6 +12,10 @@ Everything else is the official app, unchanged. This app is not made by Telegram
 - [Architecture](docs/ARCHITECTURE.md): how it is built.
 - [Plan](PLAN.md): open work.
 
+## Install
+
+Release APKs are on the [GitHub Releases](https://github.com/drumslave-git/Unofficial-Telegram-Feed/releases) page, one APK for every version with all four ABIs. The app installs beside the official Telegram app and logs in as its own session. Versions are the fork's own (`0.1.0`, `0.2.0`, ...); the Telegram version each one is built on is in the release notes and in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Build
 
 Requirements: Android SDK with platform 36, build-tools 36.0.0, CMake 3.22.1 and NDK 27.2.12479018; JDK 17 (Gradle 8.13 does not run on Java 24 or newer).

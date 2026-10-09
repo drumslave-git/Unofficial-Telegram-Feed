@@ -101,6 +101,8 @@ The gradle property `TGFEED_ABIS` (comma-separated ABI names) limits the ABIs th
 
 ## 10. Releases
 
+The version is the fork's own: `APP_VERSION_NAME` (`0.1.0`) and `APP_VERSION_CODE` (1, 2, 3, ..., one step per release) in `gradle.properties`; Telegram's build script multiplies the code by ten and adds the flavour's digit, so the APK's `versionCode` is `APP_VERSION_CODE * 10 + 9`. An upstream merge keeps the fork's values. `BuildVars.CHECK_UPDATES` is off, so the app never asks for Telegram's own updates.
+
 A tag `v<version>` pushed to GitHub runs `.github/workflows/release.yml` (it can also be started by hand with an existing tag). It builds `:TMessagesProj_App:assembleAfatRelease` with all four ABIs, signed with the keystore from the secret `ANDROID_KEYSTORE_BASE64` (`base64 -w0 release.keystore`, written over the dummy `TMessagesProj/config/release.keystore` in the runner's checkout) and the gradle properties `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS` and `RELEASE_KEY_PASSWORD` from the secrets `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`, and publishes `unofficial-telegram-feed-<tag>.apk` on the tag's GitHub release. It needs the same three secrets as `ci.yml` and fails when any secret is missing.
 
 The keystore is created once, locally, and kept out of git:

@@ -4,13 +4,9 @@ Open work only. A task leaves this file in the commit that finishes it; `git log
 
 Legend: `[ ]` not started, `[~]` in progress (name the branch).
 
-**Current phase:** P1 — Stories switch. **Next task:** P1-3.
+**Current phase:** P2 — Feeds. **Next task:** P2-1.
 
 The fork of the official Telegram Android client (DrKLO/Telegram, 12.10.6) that takes over three features of the Flutter app `telegram-feed`: feeds that group channels into one timeline, keyword rules per channel that decide which posts notify and are read aloud, and a switch that hides stories. Everything else stays as the official app has it. Each phase from P1 on ends with a tagged release.
-
-## P1 — Stories switch
-
-- [ ] P1-3 Release 0.1.0: tag, signed APK, README.
 
 ## P2 — Feeds
 

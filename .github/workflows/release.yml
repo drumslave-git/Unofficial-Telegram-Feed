@@ -61,6 +61,8 @@ jobs:
           mkdir -p build/release
           cp TMessagesProj_App/build/outputs/apk/afat/release/app.apk "build/release/unofficial-telegram-feed-${tag}.apk"
           ls -la build/release
+          base=$(sed -n 's/^TELEGRAM_BASE_VERSION=//p' gradle.properties)
+          echo "Unofficial Telegram Feed ${tag#v}, built on Telegram $base." > build/release/notes.md
       - name: Remove secrets and signing material
         if: always()
         run: |
@@ -73,4 +75,5 @@ jobs:
       - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
+          body_path: build/release/notes.md
           files: build/release/*.apk

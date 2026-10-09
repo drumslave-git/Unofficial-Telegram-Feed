@@ -77,6 +77,25 @@ public class FilterTabsView extends FrameLayout {
 
     private final Theme.ResourcesProvider resourcesProvider;
 
+    // TGFEED: the Feeds tab after "All chats". Its id and stable id never collide with a folder's
+    // index or localId; the folder reordering below maps tab positions to folder indexes around it.
+    public static final int TGFEED_TAB_ID = 1 << 20;
+    public static final int TGFEED_STABLE_ID = 1 << 20;
+
+    private boolean tgfeedIsFeedsTab(int position) {
+        return position >= 0 && position < tabs.size() && tabs.get(position).id == TGFEED_TAB_ID;
+    }
+
+    private int tgfeedFilterIndex(int position) {
+        int index = position;
+        for (int i = 0; i < position && i < tabs.size(); i++) {
+            if (tabs.get(i).id == TGFEED_TAB_ID) {
+                index--;
+            }
+        }
+        return index;
+    }
+
     public int getCurrentTabStableId() {
         return positionToStableId.get(currentPosition, -1);
     }
@@ -297,7 +316,7 @@ public class FilterTabsView extends FrameLayout {
         @Override
         protected void onDraw(@NonNull Canvas canvas) {
             boolean reorderEnabled = true;
-            boolean showRemove = !currentTab.isDefault && reorderEnabled;
+            boolean showRemove = !currentTab.isDefault && reorderEnabled && currentTab.id != TGFEED_TAB_ID; // TGFEED
             if (reorderEnabled && editingAnimationProgress != 0) {
                 canvas.save();
                 float p = editingAnimationProgress * (currentPosition % 2 == 0 ? 1.0f : -1.0f);
@@ -1813,6 +1832,11 @@ public class FilterTabsView extends FrameLayout {
             if (idx1 < 0 || idx2 < 0 || idx1 >= count || idx2 >= count) {
                 return;
             }
+            if (tgfeedIsFeedsTab(idx1) || tgfeedIsFeedsTab(idx2)) { // TGFEED: the Feeds tab stays where it is
+                return;
+            }
+            idx1 = tgfeedFilterIndex(idx1); // TGFEED
+            idx2 = tgfeedFilterIndex(idx2); // TGFEED
             ArrayList<MessagesController.DialogFilter> filters = MessagesController.getInstance(UserConfig.selectedAccount).getDialogFilters();
             MessagesController.DialogFilter filter1 = filters.get(idx1);
             MessagesController.DialogFilter filter2 = filters.get(idx2);
@@ -1874,15 +1898,19 @@ public class FilterTabsView extends FrameLayout {
 //                notifyItemMoved(i, i + 1);
                 positionToStableId.put(i + 1, positionToStableId.get(i));
             }
-            MessagesController.DialogFilter filter = filters.remove(theIndex);
+            MessagesController.DialogFilter filter = filters.remove(tgfeedFilterIndex(theIndex)); // TGFEED
             filter.order = 0;
             filters.add(0, filter);
             positionToStableId.put(0, temp);
             tabs.add(0, tabs.remove(theIndex));
             tabs.get(0).id = temp2;
-            for (int i = 0; i <= theIndex; ++i) {
-                tabs.get(i).id = i;
-                filters.get(i).order = i;
+            for (int i = 0, f = 0; i <= theIndex; ++i) { // TGFEED: the Feeds tab keeps its id
+                if (tabs.get(i).id == TGFEED_TAB_ID) {
+                    continue;
+                }
+                tabs.get(i).id = f;
+                filters.get(f).order = f;
+                f++;
             }
             for (int i = 0; i <= theIndex; ++i) {
                 if (currentPosition == i) {
@@ -1912,6 +1940,9 @@ public class FilterTabsView extends FrameLayout {
 
         @Override
         public int getMovementFlags(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder) {
+            if (tgfeedIsFeedsTab(viewHolder.getAdapterPosition())) { // TGFEED
+                return makeMovementFlags(0, 0);
+            }
             if (MessagesController.getInstance(UserConfig.selectedAccount).premiumFeaturesBlocked() && (!isEditing || (viewHolder.getAdapterPosition() == 0 && tabs.get(0).isDefault && !UserConfig.getInstance(UserConfig.selectedAccount).isPremium()))) {
                 return makeMovementFlags(0, 0);
             }
@@ -1921,6 +1952,9 @@ public class FilterTabsView extends FrameLayout {
         @Override
         public boolean onMove(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder source, @NonNull RecyclerView.ViewHolder target) {
             if (MessagesController.getInstance(UserConfig.selectedAccount).premiumFeaturesBlocked() && ((source.getAdapterPosition() == 0 || target.getAdapterPosition() == 0) && !UserConfig.getInstance(UserConfig.selectedAccount).isPremium())) {
+                return false;
+            }
+            if (tgfeedIsFeedsTab(source.getAdapterPosition()) || tgfeedIsFeedsTab(target.getAdapterPosition())) { // TGFEED
                 return false;
             }
             adapter.swapElements(source.getAdapterPosition(), target.getAdapterPosition());

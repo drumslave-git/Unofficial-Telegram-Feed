@@ -377,6 +377,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
         private boolean isLocked;
         public boolean animateStoriesView;
+        public org.unofficial.telegramfeed.ui.FeedsTabView tgfeedView; // TGFEED: the Feeds tab's content
 
         private RecyclerListView animationSupportListView;
         private DialogsAdapter animationSupportDialogsAdapter;
@@ -2900,6 +2901,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
             observersGroup
                 .add(NotificationCenter.dialogsNeedReload)
+                .add(NotificationCenter.tgfeedFeedsChanged) // TGFEED
                 .add(NotificationCenter.dialogFiltersUpdated)
                 .add(NotificationCenter.updateInterfaces)
                 .add(NotificationCenter.encryptedChatUpdated)
@@ -3596,6 +3598,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
                 @Override
                 public void onSamePageSelected() {
+                    if (viewPages[0].dialogsType == DIALOGS_TYPE_TGFEED && viewPages[0].tgfeedView != null) { // TGFEED
+                        viewPages[0].tgfeedView.scrollToTop();
+                        return;
+                    }
                     scrollToTop(true, false);
                 }
 
@@ -3622,7 +3628,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     }
 
                     ArrayList<MessagesController.DialogFilter> dialogFilters = getMessagesController().getDialogFilters();
-                    if (!tab.isDefault && (tab.id < 0 || tab.id >= dialogFilters.size())) {
+                    if (!tab.isDefault && tab.id != FilterTabsView.TGFEED_TAB_ID && (tab.id < 0 || tab.id >= dialogFilters.size())) { // TGFEED
                         return;
                     }
                     viewPages[1].selectedType = tab.id;
@@ -3672,6 +3678,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     if (tabId == filterTabsView.getDefaultTabId()) {
                         return getMessagesStorage().getMainUnreadCount();
                     }
+                    if (tabId == FilterTabsView.TGFEED_TAB_ID) { // TGFEED
+                        return tgfeedUnreadChannels();
+                    }
                     ArrayList<MessagesController.DialogFilter> dialogFilters = getMessagesController().getDialogFilters();
                     if (tabId < 0 || tabId >= dialogFilters.size()) {
                         return 0;
@@ -3690,6 +3699,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     if (filterOptions != null && filterOptions.isShown()) {
                         filterOptions.dismiss();
                         filterOptions = null;
+                        return false;
+                    }
+                    if (tabView.getId() == FilterTabsView.TGFEED_TAB_ID) { // TGFEED: no folder menu on the Feeds tab
                         return false;
                     }
 
@@ -3837,6 +3849,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
                 @Override
                 public void onDeletePressed(int id) {
+                    if (id == FilterTabsView.TGFEED_TAB_ID) { // TGFEED
+                        return;
+                    }
                     showDeleteAlert(getMessagesController().getDialogFilters().get(id));
                 }
             });
@@ -6802,6 +6817,13 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             viewPages[a].listView.stopScroll();
         }
         int a = animated && viewPages.length > 1 ? 1 : 0;
+        if (viewPages[a].selectedType == FilterTabsView.TGFEED_TAB_ID) { // TGFEED: the Feeds tab
+            viewPages[a].dialogsType = DIALOGS_TYPE_TGFEED;
+            viewPages[a].dialogsAdapter.setDialogsType(DIALOGS_TYPE_TGFEED);
+            tgfeedShowFeedsPage(viewPages[a], true);
+            return;
+        }
+        tgfeedShowFeedsPage(viewPages[a], false); // TGFEED
         if (viewPages[a].selectedType < 0 || viewPages[a].selectedType >= getMessagesController().getDialogFilters().size()) {
             return;
         }
@@ -6826,6 +6848,54 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         viewPages[a].dialogsAdapter.setDialogsType(viewPages[a].dialogsType);
         viewPages[a].layoutManager.scrollToPositionWithOffset(viewPages[a].dialogsType == DIALOGS_TYPE_DEFAULT && hasHiddenArchive() && viewPages[a].archivePullViewState == ARCHIVE_ITEM_STATE_HIDDEN ? 1 : 0, (int) scrollYOffset);
         checkListLoad(viewPages[a]);
+    }
+
+    // TGFEED: the Feeds tab in the chat list's tab bar
+    private boolean tgfeedShowsFeedsTab() {
+        return initialDialogsType == DIALOGS_TYPE_DEFAULT && !onlySelect && folderId == 0 && communityId == 0;
+    }
+
+    private void tgfeedShowFeedsPage(ViewPage page, boolean show) {
+        if (show && page.tgfeedView == null) {
+            page.tgfeedView = new org.unofficial.telegramfeed.ui.FeedsTabView(getContext(), this, page.listView, getResourceProvider());
+            page.addView(page.tgfeedView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        }
+        if (page.tgfeedView != null) {
+            page.tgfeedView.setVisibility(show ? View.VISIBLE : View.GONE);
+            if (show) {
+                page.tgfeedView.update();
+            }
+        }
+    }
+
+    private void tgfeedUpdate() {
+        if (viewPages != null) {
+            for (ViewPage page : viewPages) {
+                if (page != null && page.tgfeedView != null && page.tgfeedView.getVisibility() == View.VISIBLE) {
+                    page.tgfeedView.update();
+                }
+            }
+        }
+        if (filterTabsView != null) {
+            filterTabsView.notifyTabCounterChanged(FilterTabsView.TGFEED_TAB_ID);
+        }
+    }
+
+    /** The channels with unread posts across every feed, each counted once. */
+    private int tgfeedUnreadChannels() {
+        java.util.HashSet<Long> counted = new java.util.HashSet<>();
+        for (org.unofficial.telegramfeed.core.Feed feed : getAccountInstance().getFeedsController().getFeeds()) {
+            for (long channelId : feed.channelIds) {
+                if (counted.contains(channelId)) {
+                    continue;
+                }
+                TLRPC.Dialog dialog = getMessagesController().getDialog(-channelId);
+                if (dialog != null && (dialog.unread_count > 0 || dialog.unread_mark)) {
+                    counted.add(channelId);
+                }
+            }
+        }
+        return counted.size();
     }
 
     private boolean scrollBarVisible = true;
@@ -6855,7 +6925,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             filterOptions = null;
         }
         final ArrayList<MessagesController.DialogFilter> filters = getMessagesController().getDialogFilters();
-        if (filters.size() > 1) {
+        if (filters.size() > 1 || tgfeedShowsFeedsTab()) { // TGFEED: the tabs are there for the Feeds tab
             if (force || filterTabsView.getVisibility() != View.VISIBLE) {
                 boolean animatedUpdateItems = animated;
                 if (filterTabsView.getVisibility() != View.VISIBLE) {
@@ -6867,7 +6937,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 int id = filterTabsView.getCurrentTabId();
                 int stableId = filterTabsView.getCurrentTabStableId();
                 boolean selectWithStableId = false;
-                if (id != filterTabsView.getDefaultTabId() && id >= filters.size()) {
+                if (id != filterTabsView.getDefaultTabId() && id != FilterTabsView.TGFEED_TAB_ID && id >= filters.size()) { // TGFEED
                     filterTabsView.resetTabId();
                     selectWithStableId = true;
                 }
@@ -6875,6 +6945,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 for (int a = 0, N = filters.size(); a < N; a++) {
                     if (filters.get(a).isDefault()) {
                         filterTabsView.addTab(a, 0, LocaleController.getString(R.string.FilterAllChats), null, false, true, filters.get(a).locked);
+                        if (tgfeedShowsFeedsTab()) { // TGFEED: the Feeds tab after "All chats"
+                            filterTabsView.addTab(FilterTabsView.TGFEED_TAB_ID, FilterTabsView.TGFEED_STABLE_ID, LocaleController.getString(R.string.TgfeedFeedsTab), null, false, false, false);
+                        }
                     } else {
                         final MessagesController.DialogFilter filter = filters.get(a);
                         filterTabsView.addTab(a, filter.localId, filter.name, filter.entities, filter.title_noanimate, false, filters.get(a).locked);
@@ -6897,7 +6970,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     }
                 }
                 for (int a = 0; a < viewPages.length; a++) {
-                    if (viewPages[a].selectedType >= filters.size()) {
+                    if (viewPages[a].selectedType >= filters.size() && viewPages[a].selectedType != FilterTabsView.TGFEED_TAB_ID) { // TGFEED
                         viewPages[a].selectedType = filters.size() - 1;
                     }
                     viewPages[a].listView.setScrollingTouchSlop(RecyclerView.TOUCH_SLOP_PAGING);
@@ -7796,6 +7869,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     }
 
     private void checkListLoad(ViewPage viewPage, int firstVisibleItem, int lastVisibleItem) {
+        if (viewPage.dialogsType == DIALOGS_TYPE_TGFEED) { // TGFEED: nothing to load for the Feeds tab
+            return;
+        }
         if (tabsAnimationInProgress || startedTracking || filterTabsView != null && filterTabsView.getVisibility() == View.VISIBLE && filterTabsView.isAnimatingIndicator()) {
             return;
         }
@@ -10508,6 +10584,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     @SuppressWarnings("unchecked")
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.tgfeedFeedsChanged || id == NotificationCenter.dialogsNeedReload || id == NotificationCenter.updateInterfaces || id == NotificationCenter.dialogsUnreadCounterChanged) { // TGFEED
+            tgfeedUpdate();
+        }
         if (id == NotificationCenter.dialogsNeedReload) {
             if (viewPages == null || dialogsListFrozen) {
                 return;
@@ -10983,13 +11062,19 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     public static final int DIALOGS_TYPE_START_ATTACH_BOT = 14;
     public static final int DIALOGS_TYPE_BOT_REQUEST_PEER = 15;
     public static final int DIALOGS_TYPE_BOT_SELECT_VERIFY = 16;
+    public static final int DIALOGS_TYPE_TGFEED = 100; // TGFEED: the Feeds tab
 
     private ArrayList<TLRPC.Dialog> botShareDialogs;
 
     @NonNull
+    private final ArrayList<TLRPC.Dialog> tgfeedEmptyDialogs = new ArrayList<>(); // TGFEED
+
     public ArrayList<TLRPC.Dialog> getDialogsArray(int currentAccount, int dialogsType, int folderId, boolean frozen) {
         if (frozen && frozenDialogsList != null) {
             return frozenDialogsList;
+        }
+        if (dialogsType == DIALOGS_TYPE_TGFEED) { // TGFEED: the Feeds tab draws its own content
+            return tgfeedEmptyDialogs;
         }
         MessagesController messagesController = AccountInstance.getInstance(currentAccount).getMessagesController();
         if (dialogsType == DIALOGS_TYPE_DEFAULT) {

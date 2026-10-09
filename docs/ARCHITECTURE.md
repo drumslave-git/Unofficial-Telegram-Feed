@@ -78,7 +78,13 @@ With `SharedConfig.tgfeedHideStories` on, every `TGFEED` hook below answers as i
 - `ShareAlert` offers neither "My Story" nor "Repost to Story".
 - `MessageObject` gives a story message or a story mention the text type (the link or "Story"), and `ChatMessageCell` draws a reply to a story as the words "Story" without its picture.
 
-## 7. Storage
+## 7. Feeds tab
+
+The "Feeds" tab sits in the chat list's tab bar (`FilterTabsView`) right after "All chats", in the main chat list only (not in the archive, forward or selection modes), and the tab bar is shown even when the account has no folders. Telegram gives a folder tab the folder's index as its id; the Feeds tab has the id `FilterTabsView.TGFEED_TAB_ID`, outside that range, and `FilterTabsView` maps tab positions to folder indexes around it when folders are reordered in the tab bar's edit mode, where the Feeds tab itself cannot be dragged, removed or passed over.
+
+In `DialogsActivity`, a page whose selected tab is the Feeds tab gets the dialogs type `DIALOGS_TYPE_TGFEED`, for which `getDialogsArray` is empty and nothing is loaded, and a `FeedsTabView` (`org.unofficial.telegramfeed.ui`) is laid over the page's dialogs list with that list's paddings. The view lists the feeds as `FeedCell` rows (name, channel count, channels with new posts, the unread posts in the accent counter, a drag handle that reorders through `FeedsController.moveFeed`), the "New feed" row, which asks for a name, and the empty state. A long press on a row opens the menu (rename, mark as read, delete after a confirmation). The tab's counter is the number of channels with unread posts across all feeds, each counted once; a tap on the open tab scrolls the list to the top. The view and the counter refresh on `tgfeedFeedsChanged`, `dialogsNeedReload`, `updateInterfaces` and `dialogsUnreadCounterChanged`.
+
+## 8. Storage
 
 Feeds and rules are stored per account in the fork's own SQLite file, `tgfeed.db` in the account's files directory next to Telegram's `cache4.db` (`files/` for the first account, `files/account<N>/` for the others). Telegram's database is not changed, so an upstream change to its schema never touches the fork's data. `FeedsStorage` (`org.unofficial.telegramfeed.feeds`) opens the file through Telegram's `SQLiteDatabase` wrapper on its own `DispatchQueue`, creates the tables and sets `PRAGMA user_version` to the schema version (1):
 
@@ -87,7 +93,7 @@ Feeds and rules are stored per account in the fork's own SQLite file, `tgfeed.db
 
 `FeedsController` (`getInstance(account)`, also `AccountInstance.getFeedsController()`) keeps the account's feeds in memory on the UI thread, loads them once from the file, gives new feeds the next free id, writes every change through to the storage and posts `NotificationCenter.tgfeedFeedsChanged` (an account event) after a load and after every change. `MessagesController.performLogout` calls its `cleanup`, which forgets the feeds and deletes the file. The model classes `Feed` and `FeedFilter` live in the `core` package and have no Android dependencies.
 
-## 8. Upstream merges
+## 9. Upstream merges
 
 The remote `upstream` is https://github.com/DrKLO/Telegram.git. On every Telegram release:
 
@@ -96,7 +102,7 @@ The remote `upstream` is https://github.com/DrKLO/Telegram.git. On every Telegra
 3. Update the version lines in `PLAN.md` and this file, rebuild with `tool/ci.sh`, and do a hands-on pass on the emulator: login, chat list, the Feeds tab, a feed, a rule notification, read aloud, the stories switch.
 4. Commit the merge as `chore: merge Telegram <version>`.
 
-## 9. Tests and CI
+## 10. Tests and CI
 
 `tool/ci.sh` runs the unit tests of `TMessagesProj_FeedTests` (`:TMessagesProj_FeedTests:test`) and builds the debug APK, and exits with the first failing step's code; it needs `JAVA_HOME` and `ANDROID_HOME` as in section 2. `TMessagesProj_AppTests` holds Telegram's instrumented tests and is not run.
 
@@ -104,7 +110,7 @@ The gradle property `TGFEED_ABIS` (comma-separated ABI names) limits the ABIs th
 
 `.github/workflows/ci.yml` runs `tool/ci.sh` on every push and pull request on an Ubuntu runner with Temurin 17, the pinned NDK and CMake, for `arm64-v8a` only, and keeps the debug APK as the artifact `debug-apk`. It writes `secrets/` from the repository secrets `TG_API_ID`, `TG_API_HASH` and `GOOGLE_SERVICES_JSON_BASE64` (`base64 -w0 google-services.json`) and fails when one is missing.
 
-## 10. Releases
+## 11. Releases
 
 Releases are automatic. `.github/workflows/release.yml` runs on every push to `master` and computes the next version from the conventional commits since the last tag `vX.Y.Z` with `tool/next_version.sh`: a breaking change (`type!:` or a `BREAKING CHANGE:` footer) raises the major version, or the minor one while the major is 0; `feat` raises the minor; `fix` and `perf` raise the patch; commits of other types alone (`docs`, `chore`, `test`, `ci`, `refactor`) release nothing. Without any tag the version is 0.1.0. When a release is due the workflow runs the unit tests, builds `:TMessagesProj_App:assembleAfatRelease` with all four ABIs, signed with the keystore from the secret `ANDROID_KEYSTORE_BASE64` (`base64 -w0 release.keystore`, written over the dummy `TMessagesProj/config/release.keystore` in the runner's checkout) and the gradle properties `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS` and `RELEASE_KEY_PASSWORD` from the secrets `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`, tags the commit and publishes `unofficial-telegram-feed-<version>.apk` on the GitHub release with a changelog (breaking changes, features, fixes, with the task id as the scope). It needs the same three secrets as `ci.yml` and fails when any secret is missing. Only the tip of `master` is released.
 

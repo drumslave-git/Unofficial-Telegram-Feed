@@ -16,6 +16,8 @@
     <string name="TgfeedStartWith">Start with the channels of a folder?</string>
     <string name="TgfeedEmptyFeed">Empty feed</string>
     <string name="TgfeedEditChannels">Edit channels</string>
+    <string name="TgfeedUnreadPosts">Unread posts</string>
+    <string name="TgfeedNoPosts">No posts yet.</string>
     <string name="TgfeedFeedsTab">Feeds</string>
     <string name="TgfeedNewFeed">New feed</string>
     <string name="TgfeedFeedName">Feed name</string>

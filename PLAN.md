@@ -4,14 +4,13 @@ Open work only. A task leaves this file in the commit that finishes it; `git log
 
 Legend: `[ ]` not started, `[~]` in progress (name the branch).
 
-**Current phase:** P2 — Feeds. **Next task:** P2-4.
+**Current phase:** P2 — Feeds. **Next task:** P2-5.
 
 The fork of the official Telegram Android client (DrKLO/Telegram, 12.10.6) that takes over three features of the Flutter app `telegram-feed`: feeds that group channels into one timeline, keyword rules per channel that decide which posts notify and are read aloud, and a switch that hides stories. Everything else stays as the official app has it. Each phase from P1 on ends with a tagged release.
 
 ## P2 — Feeds
 
-- [ ] P2-4 Feed timeline. `FeedActivity`: one chronological list of the posts of all the feed's channels, oldest on top, drawn with `ChatMessageCell` in the group layout so every post carries its channel's name and photo (a tap opens the channel). History per channel through `MessagesController.loadMessages` with a `classGuid` per channel, merged by date then id, older posts loading as the list scrolls up; new posts through `didReceiveNewMessages`, edits and deletions applied in place; albums kept together. "Unread posts" divider at the first unread post, the button to the newest posts with the unread count, day labels and the floating day, the position restored when the feed is opened again. Reading marks each channel read up to the newest post seen in it, so the official app agrees.
-- [ ] P2-5 Post actions in a feed. The post menu as in `ChatActivity` (reactions, comments, copy, forward, share, save, report, "Show in chat" which opens the channel at the post), selection of several posts, and `PhotoViewer` paging over the pictures and videos of the whole feed.
+- [ ] P2-5 Post actions in a feed (and the media of posts: a video post drew as a blank cell in the first timeline build, to be checked with the viewer). The post menu as in `ChatActivity` (reactions, comments, copy, forward, share, save, report, "Show in chat" which opens the channel at the post), selection of several posts, and `PhotoViewer` paging over the pictures and videos of the whole feed.
 - [ ] P2-6 Feed filters and minimized posts. Per feed: all posts / only media / only text, media types, minimum video length, minimum text length, and a word condition built like a rule's; hidden posts gone or, with "Show minimized", folded to one line that a tap opens. Hidden and minimized posts are read with their neighbours and count for nothing.
 - [ ] P2-7 Feed search. The magnifier in a feed searches all its channels (`messages.search` per channel, merged), goes to the newest match with the words marked, a bar with arrows and "3 of 47", "Show as list" with the results under the channel names, filter chips for media, links, files, music and voice.
 - [ ] P2-8 Shared media of a feed. The feed's info screen has the Media, Files, Links, Music, Voice and GIFs tabs over all of its channels: `SharedMediaLayout` gets a data source that merges several dialogs.

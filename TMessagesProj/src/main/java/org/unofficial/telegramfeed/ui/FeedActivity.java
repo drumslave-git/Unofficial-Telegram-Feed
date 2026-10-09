@@ -1,0 +1,1049 @@
+package org.unofficial.telegramfeed.ui;
+
+import static org.telegram.messenger.AndroidUtilities.dp;
+
+import android.app.Activity;
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
+import android.os.Bundle;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.MessageObject;
+import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.R;
+import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.TLRPC;
+import org.telegram.ui.ActionBar.ActionBar;
+import org.telegram.ui.ActionBar.BaseFragment;
+import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Cells.ChatActionCell;
+import org.telegram.ui.Cells.ChatLoadingCell;
+import org.telegram.ui.Cells.ChatMessageCell;
+import org.telegram.ui.Cells.ChatUnreadCell;
+import org.telegram.ui.ChatActivity;
+import org.telegram.ui.Components.CounterView;
+import org.telegram.ui.Components.LayoutHelper;
+import org.telegram.ui.Components.RecyclerListView;
+import org.telegram.ui.Components.SizeNotifierFrameLayout;
+import org.unofficial.telegramfeed.core.Feed;
+import org.unofficial.telegramfeed.core.FeedOrder;
+import org.unofficial.telegramfeed.feeds.FeedsController;
+
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+
+/**
+ * A feed's timeline: the posts of all its channels in one chronological list, oldest on top,
+ * drawn with Telegram's message cells in the group layout so that every post carries its
+ * channel's name and photo. History comes per channel through {@code MessagesController.loadMessages}
+ * and is merged by date; posts older than the oldest loaded post of any channel that still has
+ * history wait until that channel has loaded as far, so the list never shows a gap.
+ */
+public class FeedActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
+
+    private static final int MENU_EDIT = 1;
+    private static final int INITIAL_COUNT = 30;
+    private static final int OLDER_COUNT = 50;
+
+    /** The loading state of one channel's history. */
+    private static class ChannelState {
+        final long channelId;
+        final int classGuid = ConnectionsManager.generateClassGuid();
+        int loadIndex;
+        boolean loading;
+        boolean loadedOnce;
+        boolean cacheEnd;
+        boolean endReached;
+        int minId = Integer.MAX_VALUE;
+        int minDate = Integer.MAX_VALUE;
+
+        ChannelState(long channelId) {
+            this.channelId = channelId;
+        }
+    }
+
+    private final long feedId;
+    private Feed feed;
+    private final HashMap<Long, ChannelState> channels = new HashMap<>();
+    /** Every loaded post, keyed by channel and message id. */
+    private final HashMap<Long, MessageObject> posts = new HashMap<>();
+    /** The rows, newest first, as ChatActivity keeps them: posts, date rows and the unread divider. */
+    private final ArrayList<MessageObject> messages = new ArrayList<>();
+    private final HashMap<Long, MessageObject.GroupedMessages> groups = new HashMap<>();
+    private final HashMap<Long, Integer> stableIds = new HashMap<>();
+    private int nextStableId = 10;
+    private long unreadDividerKey;
+    private boolean unreadDividerDecided;
+    private boolean unreadDividerSeen;
+    private boolean restoredPosition;
+
+    private SizeNotifierFrameLayout contentView;
+    private RecyclerListView listView;
+    private LinearLayoutManager layoutManager;
+    private Adapter adapter;
+    private ChatActionCell floatingDateView;
+    private FrameLayout pagedownButton;
+    private CounterView pagedownCounter;
+    private TextView emptyView;
+    private boolean scrolling;
+    private final Runnable hideFloatingDate = () -> {
+        if (floatingDateView != null) {
+            floatingDateView.animate().alpha(0f).setDuration(150).start();
+        }
+    };
+
+    public FeedActivity(long feedId) {
+        this.feedId = feedId;
+    }
+
+    private FeedsController controller() {
+        return getAccountInstance().getFeedsController();
+    }
+
+    private static long key(long channelId, int messageId) {
+        return (channelId << 32) | (messageId & 0xFFFFFFFFL);
+    }
+
+    @Override
+    public boolean onFragmentCreate() {
+        feed = controller().getFeed(feedId);
+        if (feed == null) {
+            return false;
+        }
+        for (long channelId : feed.channelIds) {
+            channels.put(channelId, new ChannelState(channelId));
+        }
+        getNotificationCenter().addObserver(this, NotificationCenter.messagesDidLoad);
+        getNotificationCenter().addObserver(this, NotificationCenter.didReceiveNewMessages);
+        getNotificationCenter().addObserver(this, NotificationCenter.messagesDeleted);
+        getNotificationCenter().addObserver(this, NotificationCenter.replaceMessagesObjects);
+        getNotificationCenter().addObserver(this, NotificationCenter.tgfeedFeedsChanged);
+        getNotificationCenter().addObserver(this, NotificationCenter.updateInterfaces);
+        loadInitial();
+        return super.onFragmentCreate();
+    }
+
+    @Override
+    public void onFragmentDestroy() {
+        savePosition();
+        getNotificationCenter().removeObserver(this, NotificationCenter.messagesDidLoad);
+        getNotificationCenter().removeObserver(this, NotificationCenter.didReceiveNewMessages);
+        getNotificationCenter().removeObserver(this, NotificationCenter.messagesDeleted);
+        getNotificationCenter().removeObserver(this, NotificationCenter.replaceMessagesObjects);
+        getNotificationCenter().removeObserver(this, NotificationCenter.tgfeedFeedsChanged);
+        getNotificationCenter().removeObserver(this, NotificationCenter.updateInterfaces);
+        for (ChannelState state : channels.values()) {
+            getConnectionsManager().cancelRequestsForGuid(state.classGuid);
+        }
+        super.onFragmentDestroy();
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        savePosition();
+    }
+
+    @Override
+    public View createView(Context context) {
+        Theme.createChatResources(context, false);
+
+        actionBar.setBackButtonImage(R.drawable.ic_ab_back);
+        actionBar.setAllowOverlayTitle(true);
+        updateTitle();
+        actionBar.createMenu().addItem(MENU_EDIT, R.drawable.msg_edit).setContentDescription(LocaleController.getString(R.string.TgfeedEditChannels));
+        actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
+            @Override
+            public void onItemClick(int id) {
+                if (id == -1) {
+                    finishFragment();
+                } else if (id == MENU_EDIT) {
+                    presentFragment(new FeedEditActivity(feedId));
+                }
+            }
+        });
+
+        contentView = new SizeNotifierFrameLayout(context) {
+            @Override
+            protected boolean isActionBarVisible() {
+                return false; // the fragment view sits below the action bar, nothing to clip
+            }
+
+            @Override
+            protected boolean isStatusBarVisible() {
+                return false;
+            }
+        };
+        contentView.setOccupyStatusBar(false);
+        contentView.setBackgroundImage(Theme.getCachedWallpaper(), Theme.isWallpaperMotion());
+        fragmentView = contentView;
+
+        emptyView = new TextView(context);
+        emptyView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+        emptyView.setTextColor(Theme.getColor(Theme.key_chat_serviceText));
+        emptyView.setGravity(Gravity.CENTER);
+        emptyView.setPadding(dp(16), dp(8), dp(16), dp(8));
+        android.graphics.drawable.GradientDrawable emptyBackground = new android.graphics.drawable.GradientDrawable();
+        emptyBackground.setCornerRadius(dp(12));
+        emptyBackground.setColor(Theme.getColor(Theme.key_chat_serviceBackground));
+        emptyView.setBackground(emptyBackground);
+        emptyView.setVisibility(View.GONE);
+        contentView.addView(emptyView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 32, 0, 32, 0));
+
+        listView = new RecyclerListView(context) {
+            @Override
+            public boolean drawChild(android.graphics.Canvas canvas, View child, long drawingTime) {
+                boolean result = super.drawChild(canvas, child, drawingTime);
+                if (child instanceof ChatMessageCell) {
+                    drawAvatar(canvas, (ChatMessageCell) child);
+                }
+                return result;
+            }
+
+            /** Draws the channel photo at the bottom of a run of pinned cells, as Telegram's chat list does. */
+            private void drawAvatar(android.graphics.Canvas canvas, ChatMessageCell cell) {
+                org.telegram.messenger.ImageReceiver imageReceiver = cell.getAvatarImage();
+                if (imageReceiver == null || cell.getMessageObject() == null) {
+                    return;
+                }
+                boolean updateVisibility = !cell.getMessageObject().deleted && getChildAdapterPosition(cell) != RecyclerView.NO_POSITION;
+                int top = (int) cell.getY();
+                if (cell.drawPinnedBottom()) {
+                    RecyclerView.ViewHolder holder = getChildViewHolder(cell);
+                    int p = holder.getAdapterPosition();
+                    if (p >= 0 && findViewHolderForAdapterPosition(p + 1) != null) {
+                        imageReceiver.setVisible(false, false);
+                        return;
+                    }
+                }
+                float tx = cell.getSlidingOffsetX() + cell.getCheckBoxTranslation();
+                int y = (int) cell.getY() + cell.getLayoutHeight();
+                int maxY = getMeasuredHeight() - getPaddingBottom();
+                if (y > maxY) {
+                    y = maxY;
+                }
+                if (cell.drawPinnedTop()) {
+                    RecyclerView.ViewHolder holder = getChildViewHolder(cell);
+                    int p = holder.getAdapterPosition();
+                    if (p >= 0) {
+                        for (int tries = 0; tries < 20; tries++) {
+                            holder = findViewHolderForAdapterPosition(p - 1);
+                            if (holder == null) {
+                                break;
+                            }
+                            top = holder.itemView.getTop();
+                            if (holder.itemView instanceof ChatMessageCell && ((ChatMessageCell) holder.itemView).drawPinnedTop()) {
+                                p = p - 1;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (y - dp(48) < top) {
+                    y = top + dp(48);
+                }
+                if (!cell.drawPinnedBottom()) {
+                    int cellBottom = (int) (cell.getY() + cell.getMeasuredHeight());
+                    if (y > cellBottom) {
+                        y = cellBottom;
+                    }
+                }
+                canvas.save();
+                if (tx != 0) {
+                    canvas.translate(tx, 0);
+                }
+                if (updateVisibility) {
+                    imageReceiver.setImageY(y - dp(44));
+                }
+                if (cell.shouldDrawAlphaLayer()) {
+                    imageReceiver.setAlpha(cell.getAlpha());
+                    canvas.scale(cell.getScaleX(), cell.getScaleY(), cell.getX() + cell.getPivotX(), cell.getY() + (cell.getHeight() >> 1));
+                } else {
+                    imageReceiver.setAlpha(1f);
+                }
+                if (updateVisibility) {
+                    imageReceiver.setVisible(true, false);
+                }
+                imageReceiver.draw(canvas);
+                canvas.restore();
+            }
+        };
+        listView.setTag(1);
+        listView.setVerticalScrollBarEnabled(true);
+        listView.setClipToPadding(false);
+        listView.setPadding(0, dp(4), 0, dp(3));
+        listView.setItemAnimator(null);
+        layoutManager = new LinearLayoutManager(context);
+        layoutManager.setOrientation(LinearLayoutManager.VERTICAL);
+        layoutManager.setStackFromEnd(true);
+        listView.setLayoutManager(layoutManager);
+        adapter = new Adapter(context);
+        listView.setAdapter(adapter);
+        listView.setOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+                scrolling = newState != RecyclerView.SCROLL_STATE_IDLE;
+                if (!scrolling) {
+                    AndroidUtilities.runOnUIThread(hideFloatingDate, 700);
+                    markVisibleAsRead();
+                } else {
+                    AndroidUtilities.cancelRunOnUIThread(hideFloatingDate);
+                }
+            }
+
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                if (dy != 0 && scrolling) {
+                    updateFloatingDate();
+                }
+                checkLoadOlder();
+                updatePagedownButton();
+            }
+        });
+        contentView.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+
+        floatingDateView = new ChatActionCell(context);
+        floatingDateView.setAlpha(0f);
+        floatingDateView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        contentView.addView(floatingDateView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL, 0, 4, 0, 0));
+
+        pagedownButton = new FrameLayout(context);
+        pagedownButton.setVisibility(View.INVISIBLE);
+        ImageView pagedownImage = new ImageView(context);
+        pagedownImage.setImageResource(R.drawable.pagedown);
+        pagedownImage.setScaleType(ImageView.ScaleType.CENTER);
+        pagedownImage.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_windowBackgroundWhiteGrayIcon), PorterDuff.Mode.MULTIPLY));
+        pagedownImage.setBackground(Theme.createSimpleSelectorCircleDrawable(dp(42), Theme.getColor(Theme.key_chat_goDownButton), Theme.getColor(Theme.key_listSelector)));
+        pagedownButton.addView(pagedownImage, LayoutHelper.createFrame(42, 42, Gravity.LEFT | Gravity.BOTTOM, 0, 0, 0, 0));
+        pagedownCounter = new CounterView(context, null);
+        pagedownCounter.setColors(Theme.key_chat_goDownButtonCounter, Theme.key_chat_goDownButtonCounterBackground);
+        pagedownCounter.setGravity(Gravity.CENTER);
+        pagedownButton.addView(pagedownCounter, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 28, Gravity.TOP | Gravity.CENTER_HORIZONTAL, 0, 0, 0, 0));
+        pagedownButton.setOnClickListener(v -> onPagedown());
+        contentView.addView(pagedownButton, LayoutHelper.createFrame(46, 66, Gravity.RIGHT | Gravity.BOTTOM, 0, 0, 12, 8));
+
+        rebuildRows();
+        return fragmentView;
+    }
+
+    private void updateTitle() {
+        if (actionBar == null || feed == null) {
+            return;
+        }
+        actionBar.setTitle(feed.name);
+        actionBar.setSubtitle(LocaleController.formatPluralString("TgfeedChannels", feed.channelIds.size()));
+    }
+
+    // ---------------------------------------------------------------- loading
+
+    private void loadInitial() {
+        for (ChannelState state : channels.values()) {
+            if (!state.loading && !state.loadedOnce) {
+                state.loading = true;
+                getMessagesController().loadMessages(-state.channelId, 0, false, INITIAL_COUNT, 0, 0, true, 0, state.classGuid, 2, 0, ChatActivity.MODE_DEFAULT, 0, 0, state.loadIndex++, false);
+            }
+        }
+    }
+
+    private boolean allEnded() {
+        for (ChannelState state : channels.values()) {
+            if (!state.endReached) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** The date below which posts wait for the channels that still have history to load. */
+    private int displayFloor() {
+        int floor = 0;
+        for (ChannelState state : channels.values()) {
+            if (!state.endReached && state.loadedOnce) {
+                floor = Math.max(floor, state.minDate);
+            }
+        }
+        return floor;
+    }
+
+    private void checkLoadOlder() {
+        if (layoutManager == null || adapter.getItemCount() == 0) {
+            return;
+        }
+        if (layoutManager.findFirstVisibleItemPosition() > 8) {
+            return;
+        }
+        loadOlder();
+    }
+
+    private void loadOlder() {
+        int floor = displayFloor();
+        for (ChannelState state : channels.values()) {
+            if (state.loading || state.endReached || !state.loadedOnce) {
+                continue;
+            }
+            if (state.minDate > floor) {
+                continue;
+            }
+            state.loading = true;
+            getMessagesController().loadMessages(-state.channelId, 0, false, OLDER_COUNT, state.minId, 0, !state.cacheEnd, state.minDate, state.classGuid, 0, 0, ChatActivity.MODE_DEFAULT, 0, 0, state.loadIndex++, false);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.messagesDidLoad) {
+            int classGuid = (Integer) args[10];
+            ChannelState state = null;
+            for (ChannelState s : channels.values()) {
+                if (s.classGuid == classGuid) {
+                    state = s;
+                    break;
+                }
+            }
+            if (state == null) {
+                return;
+            }
+            ArrayList<MessageObject> objects = (ArrayList<MessageObject>) args[2];
+            boolean isCache = (Boolean) args[3];
+            boolean isEnd = (Boolean) args[9];
+            int loadType = (Integer) args[8];
+            state.loading = false;
+            state.loadedOnce = true;
+            boolean added = false;
+            for (MessageObject message : objects) {
+                if (message.isDateObject || message.getId() <= 0) {
+                    continue;
+                }
+                state.minId = Math.min(state.minId, message.getId());
+                state.minDate = Math.min(state.minDate, message.messageOwner.date);
+                if (!posts.containsKey(key(state.channelId, message.getId()))) {
+                    message.forceAvatar = true;
+                    posts.put(key(state.channelId, message.getId()), message);
+                    added = true;
+                }
+            }
+            if (isCache) {
+                if (isEnd || objects.size() < (loadType == 2 ? INITIAL_COUNT : OLDER_COUNT)) {
+                    state.cacheEnd = true;
+                }
+                if (objects.isEmpty() && !isEnd) {
+                    state.loading = true;
+                    getMessagesController().loadMessages(-state.channelId, 0, false, loadType == 2 ? INITIAL_COUNT : OLDER_COUNT, loadType == 2 ? 0 : state.minId, 0, false, loadType == 2 ? 0 : state.minDate, state.classGuid, loadType, 0, ChatActivity.MODE_DEFAULT, 0, 0, state.loadIndex++, false);
+                    return;
+                }
+            } else if (isEnd || objects.isEmpty()) {
+                state.endReached = true;
+            }
+            rebuildRows();
+            if (!restoredPosition) {
+                restorePosition();
+            }
+            AndroidUtilities.runOnUIThread(this::checkLoadOlder);
+        } else if (id == NotificationCenter.didReceiveNewMessages) {
+            long dialogId = (Long) args[0];
+            boolean scheduled = args.length > 2 && args[2] instanceof Boolean && (Boolean) args[2];
+            ChannelState state = channels.get(-dialogId);
+            if (state == null || scheduled) {
+                return;
+            }
+            boolean atBottom = isAtBottom();
+            ArrayList<MessageObject> objects = (ArrayList<MessageObject>) args[1];
+            boolean added = false;
+            for (MessageObject message : objects) {
+                if (message.getId() <= 0 || message.isDateObject) {
+                    continue;
+                }
+                long k = key(state.channelId, message.getId());
+                if (!posts.containsKey(k)) {
+                    message.forceAvatar = true;
+                    posts.put(k, message);
+                    added = true;
+                }
+            }
+            if (added) {
+                rebuildRows();
+                if (atBottom) {
+                    scrollToBottom();
+                    markVisibleAsRead();
+                }
+            }
+        } else if (id == NotificationCenter.messagesDeleted) {
+            ArrayList<Integer> ids = (ArrayList<Integer>) args[0];
+            long channelId = (Long) args[1];
+            boolean scheduled = args.length > 2 && args[2] instanceof Boolean && (Boolean) args[2];
+            if (scheduled || !channels.containsKey(channelId)) {
+                return;
+            }
+            boolean removed = false;
+            for (int messageId : ids) {
+                if (posts.remove(key(channelId, messageId)) != null) {
+                    removed = true;
+                }
+            }
+            if (removed) {
+                rebuildRows();
+            }
+        } else if (id == NotificationCenter.replaceMessagesObjects) {
+            long dialogId = (Long) args[0];
+            ChannelState state = channels.get(-dialogId);
+            if (state == null) {
+                return;
+            }
+            ArrayList<MessageObject> objects = (ArrayList<MessageObject>) args[1];
+            boolean replaced = false;
+            for (MessageObject message : objects) {
+                long k = key(state.channelId, message.getId());
+                MessageObject old = posts.get(k);
+                if (old != null) {
+                    message.forceAvatar = true;
+                    message.copyStableParams(old);
+                    posts.put(k, message);
+                    replaced = true;
+                }
+            }
+            if (replaced) {
+                rebuildRows();
+            }
+        } else if (id == NotificationCenter.tgfeedFeedsChanged) {
+            Feed updated = controller().getFeed(feedId);
+            if (updated == null) {
+                finishFragment();
+                return;
+            }
+            feed = updated;
+            updateTitle();
+            boolean changed = false;
+            for (long channelId : feed.channelIds) {
+                if (!channels.containsKey(channelId)) {
+                    channels.put(channelId, new ChannelState(channelId));
+                    changed = true;
+                }
+            }
+            for (Long channelId : new ArrayList<>(channels.keySet())) {
+                if (!feed.hasChannel(channelId)) {
+                    ChannelState state = channels.remove(channelId);
+                    getConnectionsManager().cancelRequestsForGuid(state.classGuid);
+                    for (Long k : new ArrayList<>(posts.keySet())) {
+                        if ((k >> 32) == channelId) {
+                            posts.remove(k);
+                        }
+                    }
+                    changed = true;
+                }
+            }
+            if (changed) {
+                loadInitial();
+                rebuildRows();
+            }
+        } else if (id == NotificationCenter.updateInterfaces) {
+            updatePagedownButton();
+        }
+    }
+
+    // ---------------------------------------------------------------- rows
+
+    private boolean isUnread(MessageObject message) {
+        TLRPC.Dialog dialog = getMessagesController().getDialog(message.getDialogId());
+        return dialog != null && message.getId() > dialog.read_inbox_max_id;
+    }
+
+    private int stableId(long key) {
+        Integer id = stableIds.get(key);
+        if (id == null) {
+            id = nextStableId++;
+            stableIds.put(key, id);
+        }
+        return id;
+    }
+
+    private void rebuildRows() {
+        ArrayList<MessageObject> all = new ArrayList<>(posts.values());
+        int floor = allEnded() ? 0 : displayFloor();
+        ArrayList<MessageObject> shown = new ArrayList<>(all.size());
+        for (MessageObject message : all) {
+            if (message.messageOwner.date >= floor) {
+                shown.add(message);
+            }
+        }
+        Collections.sort(shown, (a, b) -> FeedOrder.OLDEST_FIRST.compare(
+                new FeedOrder.Key(-a.getDialogId(), a.getId(), a.messageOwner.date),
+                new FeedOrder.Key(-b.getDialogId(), b.getId(), b.messageOwner.date)));
+        Collections.reverse(shown);
+
+        groups.clear();
+        for (MessageObject message : shown) {
+            if (message.hasValidGroupId()) {
+                long groupKey = message.getGroupId() ^ message.getDialogId();
+                MessageObject.GroupedMessages group = groups.get(groupKey);
+                if (group == null) {
+                    group = new MessageObject.GroupedMessages();
+                    group.groupId = message.getGroupId();
+                    groups.put(groupKey, group);
+                }
+                group.messages.add(message);
+            }
+        }
+        for (MessageObject.GroupedMessages group : groups.values()) {
+            group.calculate();
+        }
+
+        if (!unreadDividerDecided && !shown.isEmpty()) {
+            boolean anyLoaded = false;
+            for (ChannelState state : channels.values()) {
+                anyLoaded |= state.loadedOnce;
+            }
+            if (anyLoaded) {
+                for (int i = shown.size() - 1; i >= 0; i--) {
+                    MessageObject message = shown.get(i);
+                    if (isUnread(message)) {
+                        unreadDividerKey = key(-message.getDialogId(), message.getId());
+                        break;
+                    }
+                }
+                unreadDividerDecided = true;
+            }
+        }
+
+        messages.clear();
+        int currentDay = Integer.MIN_VALUE;
+        int currentDayStart = 0;
+        for (MessageObject message : shown) {
+            Calendar calendar = Calendar.getInstance();
+            calendar.setTimeInMillis(message.messageOwner.date * 1000L);
+            int day = calendar.get(Calendar.YEAR) * 1000 + calendar.get(Calendar.DAY_OF_YEAR);
+            if (day != currentDay) {
+                if (currentDay != Integer.MIN_VALUE) {
+                    messages.add(dateRow(currentDayStart, currentDay));
+                }
+                currentDay = day;
+                calendar.set(Calendar.HOUR_OF_DAY, 0);
+                calendar.set(Calendar.MINUTE, 0);
+                calendar.set(Calendar.SECOND, 0);
+                calendar.set(Calendar.MILLISECOND, 0);
+                currentDayStart = (int) (calendar.getTimeInMillis() / 1000);
+            }
+            message.stableId = stableId(key(-message.getDialogId(), message.getId()));
+            messages.add(message);
+            if (unreadDividerKey != 0 && key(-message.getDialogId(), message.getId()) == unreadDividerKey) {
+                messages.add(unreadRow());
+            }
+        }
+        if (currentDay != Integer.MIN_VALUE) {
+            messages.add(dateRow(currentDayStart, currentDay));
+        }
+
+        adapter.updateRows();
+        adapter.notifyDataSetChanged();
+        updateEmptyView();
+        updatePagedownButton();
+    }
+
+    private MessageObject dateRow(int dayStart, int day) {
+        TLRPC.TL_message dateMsg = new TLRPC.TL_message();
+        dateMsg.message = LocaleController.formatDateChat(dayStart);
+        dateMsg.id = 0;
+        dateMsg.date = dayStart;
+        MessageObject dateObj = new MessageObject(currentAccount, dateMsg, false, false);
+        dateObj.type = 10;
+        dateObj.contentType = 1;
+        dateObj.isDateObject = true;
+        dateObj.stableId = stableId(key(1L << 40, day));
+        return dateObj;
+    }
+
+    private MessageObject unreadRow() {
+        TLRPC.TL_message msg = new TLRPC.TL_message();
+        msg.message = "";
+        msg.id = 0;
+        MessageObject obj = new MessageObject(currentAccount, msg, false, false);
+        obj.type = MessageObject.TYPE_LOADING;
+        obj.contentType = 2;
+        obj.stableId = 2;
+        return obj;
+    }
+
+    private void updateEmptyView() {
+        if (emptyView == null) {
+            return;
+        }
+        if (feed.channelIds.isEmpty()) {
+            emptyView.setText(LocaleController.getString(R.string.TgfeedNoChannelsInFeed));
+            emptyView.setVisibility(View.VISIBLE);
+        } else if (messages.isEmpty() && allEnded()) {
+            emptyView.setText(LocaleController.getString(R.string.TgfeedNoPosts));
+            emptyView.setVisibility(View.VISIBLE);
+        } else {
+            emptyView.setVisibility(View.GONE);
+        }
+    }
+
+    // ---------------------------------------------------------------- scrolling
+
+    private boolean isAtBottom() {
+        if (layoutManager == null || adapter.getItemCount() == 0) {
+            return true;
+        }
+        return layoutManager.findLastVisibleItemPosition() >= adapter.getItemCount() - 2;
+    }
+
+    private void scrollToBottom() {
+        if (layoutManager == null || adapter.getItemCount() == 0) {
+            return;
+        }
+        layoutManager.scrollToPositionWithOffset(adapter.getItemCount() - 1, -100000 - listView.getPaddingTop());
+        updatePagedownButton();
+    }
+
+    private int unreadDividerPosition() {
+        for (int i = 0; i < messages.size(); i++) {
+            if (messages.get(i).contentType == 2) {
+                return adapter.positionOf(i);
+            }
+        }
+        return -1;
+    }
+
+    private void onPagedown() {
+        int divider = unreadDividerPosition();
+        if (divider >= 0 && !unreadDividerSeen) {
+            unreadDividerSeen = true;
+            layoutManager.scrollToPositionWithOffset(divider, dp(48));
+        } else {
+            scrollToBottom();
+        }
+        markVisibleAsRead();
+    }
+
+    private void updatePagedownButton() {
+        if (pagedownButton == null) {
+            return;
+        }
+        boolean show = !isAtBottom();
+        if (show != (pagedownButton.getVisibility() == View.VISIBLE)) {
+            pagedownButton.setVisibility(show ? View.VISIBLE : View.INVISIBLE);
+        }
+        int unread = 0;
+        for (long channelId : feed.channelIds) {
+            TLRPC.Dialog dialog = getMessagesController().getDialog(-channelId);
+            if (dialog != null) {
+                unread += dialog.unread_count;
+            }
+        }
+        pagedownCounter.setCount(unread, true);
+    }
+
+    private void restorePosition() {
+        if (messages.isEmpty() || layoutManager == null) {
+            return;
+        }
+        restoredPosition = true;
+        SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
+        String saved = preferences.getString(positionKey(), null);
+        if (saved != null) {
+            String[] parts = saved.split(":");
+            if (parts.length == 3) {
+                try {
+                    long savedKey = key(Long.parseLong(parts[0]), Integer.parseInt(parts[1]));
+                    int offset = Integer.parseInt(parts[2]);
+                    for (int i = 0; i < messages.size(); i++) {
+                        MessageObject message = messages.get(i);
+                        if (!message.isDateObject && message.contentType != 2 && key(-message.getDialogId(), message.getId()) == savedKey) {
+                            layoutManager.scrollToPositionWithOffset(adapter.positionOf(i), offset);
+                            return;
+                        }
+                    }
+                } catch (NumberFormatException ignore) {
+                }
+            }
+        }
+        int divider = unreadDividerPosition();
+        if (divider >= 0) {
+            unreadDividerSeen = true;
+            layoutManager.scrollToPositionWithOffset(divider, dp(48));
+        } else {
+            scrollToBottom();
+        }
+    }
+
+    private String positionKey() {
+        return "tgfeedPos_" + currentAccount + "_" + feedId;
+    }
+
+    private void savePosition() {
+        if (layoutManager == null || listView == null || messages.isEmpty()) {
+            return;
+        }
+        SharedPreferences.Editor editor = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE).edit();
+        if (isAtBottom()) {
+            editor.remove(positionKey()).apply();
+            return;
+        }
+        for (int i = 0; i < listView.getChildCount(); i++) {
+            View child = listView.getChildAt(i);
+            if (child instanceof ChatMessageCell) {
+                MessageObject message = ((ChatMessageCell) child).getMessageObject();
+                if (message != null) {
+                    editor.putString(positionKey(), (-message.getDialogId()) + ":" + message.getId() + ":" + (child.getTop() - listView.getPaddingTop())).apply();
+                    return;
+                }
+            }
+        }
+    }
+
+    private void updateFloatingDate() {
+        View top = null;
+        for (int i = 0; i < listView.getChildCount(); i++) {
+            View child = listView.getChildAt(i);
+            if (child.getBottom() > listView.getPaddingTop() && (top == null || child.getTop() < top.getTop())) {
+                top = child;
+            }
+        }
+        if (top == null) {
+            return;
+        }
+        MessageObject message = null;
+        if (top instanceof ChatMessageCell) {
+            message = ((ChatMessageCell) top).getMessageObject();
+        } else if (top instanceof ChatActionCell) {
+            message = ((ChatActionCell) top).getMessageObject();
+        }
+        if (message == null || message.contentType == 2) {
+            return;
+        }
+        floatingDateView.setCustomDate(message.messageOwner.date, false, true);
+        if (top instanceof ChatActionCell && message.isDateObject && top.getTop() >= listView.getPaddingTop()) {
+            floatingDateView.setAlpha(0f);
+        } else if (floatingDateView.getAlpha() != 1f) {
+            floatingDateView.animate().cancel();
+            floatingDateView.setAlpha(1f);
+        }
+    }
+
+    /** Marks each channel read up to the newest post of it on the screen. */
+    private void markVisibleAsRead() {
+        if (listView == null) {
+            return;
+        }
+        HashMap<Long, MessageObject> newest = new HashMap<>();
+        for (int i = 0; i < listView.getChildCount(); i++) {
+            View child = listView.getChildAt(i);
+            if (!(child instanceof ChatMessageCell)) {
+                continue;
+            }
+            MessageObject message = ((ChatMessageCell) child).getMessageObject();
+            if (message == null || message.getId() <= 0) {
+                continue;
+            }
+            long channelId = -message.getDialogId();
+            MessageObject current = newest.get(channelId);
+            if (current == null || message.getId() > current.getId()) {
+                newest.put(channelId, message);
+            }
+        }
+        for (MessageObject message : newest.values()) {
+            TLRPC.Dialog dialog = getMessagesController().getDialog(message.getDialogId());
+            if (dialog == null || message.getId() <= dialog.read_inbox_max_id) {
+                continue;
+            }
+            int countDiff = 0;
+            for (MessageObject post : posts.values()) {
+                if (post.getDialogId() == message.getDialogId() && post.getId() > dialog.read_inbox_max_id && post.getId() <= message.getId()) {
+                    countDiff++;
+                }
+            }
+            getMessagesController().markDialogAsRead(message.getDialogId(), message.getId(), message.getId(), message.messageOwner.date, false, 0, countDiff, true, 0);
+        }
+        updatePagedownButton();
+    }
+
+    private void openChannel(TLRPC.Chat chat, int postId) {
+        if (chat == null) {
+            return;
+        }
+        Bundle args = new Bundle();
+        args.putLong("chat_id", chat.id);
+        if (postId != 0) {
+            args.putInt("message_id", postId);
+        }
+        if (getMessagesController().checkCanOpenChat(args, this)) {
+            presentFragment(new ChatActivity(args));
+        }
+    }
+
+    // ---------------------------------------------------------------- adapter
+
+    private class Adapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+
+        private final Context context;
+        private int rowCount;
+        private int loadingRow;
+        private int messagesStartRow;
+        private int messagesEndRow;
+
+        Adapter(Context context) {
+            this.context = context;
+            setHasStableIds(true);
+        }
+
+        void updateRows() {
+            rowCount = 0;
+            loadingRow = -1;
+            if (!messages.isEmpty() && !allEnded()) {
+                loadingRow = rowCount++;
+            }
+            messagesStartRow = rowCount;
+            rowCount += messages.size();
+            messagesEndRow = rowCount;
+        }
+
+        /** The adapter position of the row at {@code index} in {@link #messages} (newest first). */
+        int positionOf(int index) {
+            return messagesStartRow + (messages.size() - 1 - index);
+        }
+
+        MessageObject messageAt(int position) {
+            if (position >= messagesStartRow && position < messagesEndRow) {
+                return messages.get(messages.size() - (position - messagesStartRow) - 1);
+            }
+            return null;
+        }
+
+        @Override
+        public int getItemCount() {
+            return rowCount;
+        }
+
+        @Override
+        public long getItemId(int position) {
+            MessageObject message = messageAt(position);
+            if (message != null) {
+                return message.stableId;
+            }
+            return position == loadingRow ? 1 : 3;
+        }
+
+        @Override
+        public int getItemViewType(int position) {
+            MessageObject message = messageAt(position);
+            if (message != null) {
+                return message.contentType;
+            }
+            return 4;
+        }
+
+        @NonNull
+        @Override
+        public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+            View view;
+            if (viewType == 0) {
+                ChatMessageCell cell = new ChatMessageCell(context, currentAccount);
+                cell.setDelegate(new ChatMessageCell.ChatMessageCellDelegate() {
+                    @Override
+                    public void didPressChannelAvatar(ChatMessageCell cell, TLRPC.Chat chat, int postId, float touchX, float touchY, boolean asForward) {
+                        openChannel(chat, 0);
+                    }
+
+                    @Override
+                    public boolean canPerformActions() {
+                        return true;
+                    }
+                });
+                view = cell;
+            } else if (viewType == 1) {
+                view = new ChatActionCell(context);
+            } else if (viewType == 2) {
+                view = new ChatUnreadCell(context, null);
+            } else {
+                view = new ChatLoadingCell(context, contentView, null);
+            }
+            view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            return new RecyclerListView.Holder(view);
+        }
+
+        @Override
+        public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
+            if (position == loadingRow) {
+                ((ChatLoadingCell) holder.itemView).setProgressVisible(true);
+                return;
+            }
+            MessageObject message = messageAt(position);
+            if (message == null) {
+                return;
+            }
+            View view = holder.itemView;
+            if (view instanceof ChatMessageCell) {
+                ChatMessageCell cell = (ChatMessageCell) view;
+                cell.isChat = true;
+                MessageObject.GroupedMessages group = message.hasValidGroupId() ? groups.get(message.getGroupId() ^ message.getDialogId()) : null;
+                boolean pinnedTop = false;
+                boolean pinnedBottom = false;
+                int prevPosition;
+                int nextPosition;
+                if (group != null) {
+                    MessageObject.GroupedMessagePosition pos = group.getPosition(message);
+                    if (pos != null) {
+                        if (group.isDocuments) {
+                            prevPosition = position + group.posArray.indexOf(pos) + 1;
+                            nextPosition = position - group.posArray.size() + group.posArray.indexOf(pos);
+                        } else {
+                            if ((pos.flags & MessageObject.POSITION_FLAG_TOP) != 0) {
+                                prevPosition = position + group.posArray.indexOf(pos) + 1;
+                            } else {
+                                pinnedTop = true;
+                                prevPosition = -100;
+                            }
+                            if ((pos.flags & MessageObject.POSITION_FLAG_BOTTOM) != 0) {
+                                nextPosition = position - group.posArray.size() + group.posArray.indexOf(pos);
+                            } else {
+                                pinnedBottom = true;
+                                nextPosition = -100;
+                            }
+                        }
+                    } else {
+                        prevPosition = -100;
+                        nextPosition = -100;
+                    }
+                } else {
+                    nextPosition = position - 1;
+                    prevPosition = position + 1;
+                }
+                if (!pinnedBottom && getItemViewType(nextPosition) == 0) {
+                    MessageObject next = messageAt(nextPosition);
+                    pinnedBottom = next != null && next.getDialogId() == message.getDialogId() && Math.abs(next.messageOwner.date - message.messageOwner.date) <= 5 * 60;
+                }
+                if (!pinnedTop && getItemViewType(prevPosition) == 0) {
+                    MessageObject prev = messageAt(prevPosition);
+                    pinnedTop = prev != null && prev.getDialogId() == message.getDialogId() && Math.abs(prev.messageOwner.date - message.messageOwner.date) <= 5 * 60;
+                }
+                cell.setMessageObject(message, group, pinnedBottom, pinnedTop, false);
+                cell.setHighlighted(false);
+            } else if (view instanceof ChatActionCell) {
+                ChatActionCell cell = (ChatActionCell) view;
+                cell.setMessageObject(message);
+                cell.setAlpha(1f);
+            } else if (view instanceof ChatUnreadCell) {
+                ((ChatUnreadCell) view).setText(LocaleController.getString(R.string.TgfeedUnreadPosts));
+            }
+        }
+    }
+}

@@ -80,7 +80,7 @@ public class FeedsTabView extends FrameLayout {
             }
             Feed feed = adapter.feedAt(position);
             if (feed != null) {
-                fragment.presentFragment(new FeedEditActivity(feed.id));
+                fragment.presentFragment(new FeedActivity(feed.id));
             }
         });
         listView.setOnItemLongClickListener((view, position) -> {

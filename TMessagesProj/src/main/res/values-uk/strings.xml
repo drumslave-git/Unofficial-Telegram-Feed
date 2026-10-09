@@ -16,6 +16,8 @@
     <string name="TgfeedStartWith">Почати з каналів теки?</string>
     <string name="TgfeedEmptyFeed">Порожня стрічка</string>
     <string name="TgfeedEditChannels">Редагувати канали</string>
+    <string name="TgfeedUnreadPosts">Непрочитані дописи</string>
+    <string name="TgfeedNoPosts">Ще немає дописів.</string>
     <string name="TgfeedFeedsTab">Стрічки</string>
     <string name="TgfeedNewFeed">Нова стрічка</string>
     <string name="TgfeedFeedName">Назва стрічки</string>

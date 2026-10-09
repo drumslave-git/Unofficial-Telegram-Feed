@@ -4,13 +4,12 @@ Open work only. A task leaves this file in the commit that finishes it; `git log
 
 Legend: `[ ]` not started, `[~]` in progress (name the branch).
 
-**Current phase:** P2 — Feeds. **Next task:** P2-1.
+**Current phase:** P2 — Feeds. **Next task:** P2-2.
 
 The fork of the official Telegram Android client (DrKLO/Telegram, 12.10.6) that takes over three features of the Flutter app `telegram-feed`: feeds that group channels into one timeline, keyword rules per channel that decide which posts notify and are read aloud, and a switch that hides stories. Everything else stays as the official app has it. Each phase from P1 on ends with a tagged release.
 
 ## P2 — Feeds
 
-- [ ] P2-1 Data model and storage. `Feed` (id, name, order, ordered channel ids, filter, "show minimized", "show the whole post") per account in the fork's SQLite file; `FeedsController` per account (created like the other `AccountInstance` controllers), with `NotificationCenter` events for changes. Unit tests.
 - [ ] P2-2 "Feeds" tab. A tab in `FilterTabsView` after "All chats" and before the folders. It lists the feeds (name, channel count, channels with new posts, unread count in the accent colour), a "New feed" button, a drag handle to reorder, a row menu (edit channels, rename, mark read, delete with the count of rules that go with it). Empty state explains what a feed is and offers to create one. The tab counts channels with unread posts once, however many feeds hold them. A tap on the open tab scrolls to the top.
 - [ ] P2-3 Feed editor. Name with a pencil; the ordered channels with remove and Undo; the add-channel sheet over the joined channels with search, multi-select, one "Add" press, and a remembered checkbox that hides channels already in a feed; "New feed" offers to start from a Telegram folder's channels (a one-time copy). Channels only: groups, bots and private chats are never offered.
 - [ ] P2-4 Feed timeline. `FeedActivity`: one chronological list of the posts of all the feed's channels, oldest on top, drawn with `ChatMessageCell` in the group layout so every post carries its channel's name and photo (a tap opens the channel). History per channel through `MessagesController.loadMessages` with a `classGuid` per channel, merged by date then id, older posts loading as the list scrolls up; new posts through `didReceiveNewMessages`, edits and deletions applied in place; albums kept together. "Unread posts" divider at the first unread post, the button to the newest posts with the unread count, day labels and the floating day, the position restored when the feed is opened again. Reading marks each channel read up to the newest post seen in it, so the official app agrees.

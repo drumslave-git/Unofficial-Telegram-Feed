@@ -384,6 +384,9 @@ public class NotificationCenter {
     public static final int communityPendingRequestsUpdate = totalEvents++;
     public static final int communitySwitchedCollapsed = totalEvents++;
 
+    // TGFEED: the fork's events
+    public static final int tgfeedFeedsChanged = totalEvents++;
+
     public static boolean alreadyLogged;
 
     private final SparseArray<ArrayList<NotificationCenterDelegate>> observers = new SparseArray<>();

@@ -4,6 +4,7 @@ import android.content.SharedPreferences;
 
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.ui.Components.Paint.PersistColorPalette;
+import org.unofficial.telegramfeed.feeds.FeedsController; // TGFEED
 
 public class AccountInstance {
 
@@ -56,6 +57,10 @@ public class AccountInstance {
 
     public NotificationsController getNotificationsController() {
         return NotificationsController.getInstance(currentAccount);
+    }
+
+    public FeedsController getFeedsController() { // TGFEED
+        return FeedsController.getInstance(currentAccount);
     }
 
     public NotificationCenter getNotificationCenter() {

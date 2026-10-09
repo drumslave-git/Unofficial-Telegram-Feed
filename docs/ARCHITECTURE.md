@@ -80,7 +80,12 @@ With `SharedConfig.tgfeedHideStories` on, every `TGFEED` hook below answers as i
 
 ## 7. Storage
 
-Feeds and rules are stored per account in the fork's own SQLite file, `tgfeed<account>.db` in the app's files directory, next to Telegram's `cache4.db`. Telegram's database is not changed, so an upstream change to its schema never touches the fork's data. Each account's controllers (`FeedsController`, `RulesController`) own that account's file and are created like the other per-account controllers of `AccountInstance`.
+Feeds and rules are stored per account in the fork's own SQLite file, `tgfeed.db` in the account's files directory next to Telegram's `cache4.db` (`files/` for the first account, `files/account<N>/` for the others). Telegram's database is not changed, so an upstream change to its schema never touches the fork's data. `FeedsStorage` (`org.unofficial.telegramfeed.feeds`) opens the file through Telegram's `SQLiteDatabase` wrapper on its own `DispatchQueue`, creates the tables and sets `PRAGMA user_version` to the schema version (1):
+
+- `feeds(id, name, sort, show_minimized, show_whole_post, filter_mode, filter_media, min_video_seconds, min_text_length, filter_words)`: one row per feed; `filter_media` is the bitmask of `FeedFilter`'s media types and `filter_words` the word condition in the rule syntax.
+- `feed_channels(feed_id, channel_id, position)`: the feed's channels in their order.
+
+`FeedsController` (`getInstance(account)`, also `AccountInstance.getFeedsController()`) keeps the account's feeds in memory on the UI thread, loads them once from the file, gives new feeds the next free id, writes every change through to the storage and posts `NotificationCenter.tgfeedFeedsChanged` (an account event) after a load and after every change. `MessagesController.performLogout` calls its `cleanup`, which forgets the feeds and deletes the file. The model classes `Feed` and `FeedFilter` live in the `core` package and have no Android dependencies.
 
 ## 8. Upstream merges
 

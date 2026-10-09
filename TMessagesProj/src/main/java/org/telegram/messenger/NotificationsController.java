@@ -715,6 +715,11 @@ public class NotificationsController extends BaseController implements Notificat
         });
     }
 
+    // TGFEED: story notifications are not shown while stories are hidden.
+    private boolean tgfeedHasStoryPushes() {
+        return !SharedConfig.tgfeedHideStories && !storyPushMessages.isEmpty();
+    }
+
     public void processDeleteStory(long dialogId, int storyId) {
         notificationsQueue.postRunnable(() -> {
             boolean changed = false;
@@ -1071,6 +1076,9 @@ public class NotificationsController extends BaseController implements Notificat
 
             for (int a = 0; a < messageObjects.size(); a++) {
                 MessageObject messageObject = messageObjects.get(a);
+                if (SharedConfig.tgfeedHideStories && (messageObject.isStoryPush || messageObject.isStoryMentionPush || messageObject.isStoryReactionPush || messageObject.isLiveStoryPush)) { // TGFEED
+                    continue;
+                }
                 if (messageObject.messageOwner != null && (messageObject.isImportedForward() ||
                         messageObject.messageOwner.action instanceof TLRPC.TL_messageActionSetMessagesTTL ||
                         messageObject.messageOwner.silent && (messageObject.messageOwner.action instanceof TLRPC.TL_messageActionContactSignUp || messageObject.messageOwner.action instanceof TLRPC.TL_messageActionUserJoined)) ||
@@ -4097,7 +4105,7 @@ public class NotificationsController extends BaseController implements Notificat
     }
 
     private void showOrUpdateNotification(boolean notifyAboutLast) {
-        if (!getUserConfig().isClientActivated() || pushMessages.isEmpty() && storyPushMessages.isEmpty() || !SharedConfig.showNotificationsForAllAccounts && currentAccount != UserConfig.selectedAccount) {
+        if (!getUserConfig().isClientActivated() || pushMessages.isEmpty() && !tgfeedHasStoryPushes() || !SharedConfig.showNotificationsForAllAccounts && currentAccount != UserConfig.selectedAccount) { // TGFEED
             dismissNotification();
             return;
         }
@@ -4838,7 +4846,7 @@ public class NotificationsController extends BaseController implements Notificat
         SharedPreferences preferences = getAccountInstance().getNotificationsSettings();
 
         ArrayList<DialogKey> sortedDialogs = new ArrayList<>();
-        if (!storyPushMessages.isEmpty()) {
+        if (tgfeedHasStoryPushes()) { // TGFEED
             sortedDialogs.add(new DialogKey(0, 0, true));
         }
         LongSparseArray<ArrayList<MessageObject>> messagesByDialogs = new LongSparseArray<>();
@@ -4904,7 +4912,7 @@ public class NotificationsController extends BaseController implements Notificat
 
         ArrayList<NotificationHolder> holders = new ArrayList<>();
 
-        boolean useSummaryNotification = Build.VERSION.SDK_INT <= Build.VERSION_CODES.O_MR1 || sortedDialogs.size() > (storyPushMessages.isEmpty() ? 1 : 2);
+        boolean useSummaryNotification = Build.VERSION.SDK_INT <= Build.VERSION_CODES.O_MR1 || sortedDialogs.size() > (tgfeedHasStoryPushes() ? 2 : 1); // TGFEED
         if (useSummaryNotification && Build.VERSION.SDK_INT >= 26) {
             checkOtherNotificationsChannel();
         }
@@ -4929,7 +4937,7 @@ public class NotificationsController extends BaseController implements Notificat
             final ArrayList<MessageObject> messageObjects;
             if (dialogKey.story) {
                 messageObjects = new ArrayList<>();
-                if (storyPushMessages.isEmpty()) {
+                if (!tgfeedHasStoryPushes()) { // TGFEED
                     FileLog.d("showExtraNotifications: ["+dialogKey.dialogId+"] continue; story but storyPushMessages is empty");
                     continue;
                 }

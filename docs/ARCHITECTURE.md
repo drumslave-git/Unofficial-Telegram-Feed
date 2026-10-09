@@ -67,6 +67,17 @@ The root `build.gradle` holds the directory lookup (`tgfeedSecretsDir`) and the 
 
 The fork's settings section, "Unofficial Telegram Feed", is the first block of `SettingsActivity` (the Settings tab), before Account and Chat Settings, built with `UItem` rows and ids from 100 up. Device-wide settings are fields of `SharedConfig` stored in the `mainconfig` preferences with the prefix `tgfeed`: `tgfeedHideStories` (the "Hide stories" switch, off at first).
 
+### Hiding stories
+
+With `SharedConfig.tgfeedHideStories` on, every `TGFEED` hook below answers as if there were no stories; toggling the switch posts `storiesUpdated` to every account (and loads stories again when turned off), so the chat list follows at once.
+
+- `StoriesController`: `hasStories`, `hasOnlySelfStories`, `hasHiddenStories`, `getStories` and `getStoriesFromFullPeer` report nothing; `loadStories`, `loadAllStories`, `loadHiddenStories`, `loadNextStories` and `processUpdate` return at once, so no story is loaded or kept.
+- `DialogsActivity`: `updateStoriesVisibility` hides the stories bar of the chat list and of the archive, the stories camera button (`floatingButtonStories`) and its hint stay hidden.
+- `ProfileStoriesView` draws no ring; `SharedMediaLayout.includeStories` drops the Stories and Archived Stories tabs.
+- `NotificationsController` skips story, story mention, story reaction and live story pushes and shows no story notification for pushes stored earlier.
+- `ShareAlert` offers neither "My Story" nor "Repost to Story".
+- `MessageObject` gives a story message or a story mention the text type (the link or "Story"), and `ChatMessageCell` draws a reply to a story as the words "Story" without its picture.
+
 ## 7. Storage
 
 Feeds and rules are stored per account in the fork's own SQLite file, `tgfeed<account>.db` in the app's files directory, next to Telegram's `cache4.db`. Telegram's database is not changed, so an upstream change to its schema never touches the fork's data. Each account's controllers (`FeedsController`, `RulesController`) own that account's file and are created like the other per-account controllers of `AccountInstance`.

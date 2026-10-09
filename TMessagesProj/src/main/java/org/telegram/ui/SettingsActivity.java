@@ -820,6 +820,15 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             case 100: // TGFEED
                 SharedConfig.toggleTgfeedHideStories();
                 listView.adapter.update(true);
+                for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+                    if (!UserConfig.getInstance(a).isClientActivated()) {
+                        continue;
+                    }
+                    if (!SharedConfig.tgfeedHideStories) {
+                        MessagesController.getInstance(a).getStoriesController().loadStories();
+                    }
+                    NotificationCenter.getInstance(a).postNotificationName(NotificationCenter.storiesUpdated);
+                }
                 break;
             case 1:
                 presentSettingFragment(new UserInfoActivity());

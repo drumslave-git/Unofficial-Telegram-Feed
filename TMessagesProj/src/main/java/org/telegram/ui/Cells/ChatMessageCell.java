@@ -19229,7 +19229,10 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
                 final TextPaint textPaint = isReplyQuote && messageObject.shouldDrawWithoutBackground() ? Theme.chat_quoteTextPaint : Theme.chat_replyTextPaint;
                 if (messageObject.messageOwner.reply_to != null && messageObject.messageOwner.reply_to.story_id != 0) {
                     name = AndroidUtilities.removeDiacritics(getNameFromDialogId(DialogObject.getPeerDialogId(messageObject.messageOwner.reply_to.peer)));
-                    if (messageObject.messageOwner.replyStory == null || messageObject.messageOwner.replyStory instanceof TL_stories.TL_storyItemDeleted) {
+                    if (SharedConfig.tgfeedHideStories) { // TGFEED: a reply to a story is plain text
+                        stringFinalText = StoriesUtilities.createReplyStoryString();
+                        needReplyImage = false;
+                    } else if (messageObject.messageOwner.replyStory == null || messageObject.messageOwner.replyStory instanceof TL_stories.TL_storyItemDeleted) {
                         if (messageObject.messageOwner.replyStory == null) {
                             stringFinalText = getString("Loading", R.string.Loading);
                         } else {

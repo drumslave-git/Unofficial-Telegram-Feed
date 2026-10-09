@@ -31,6 +31,7 @@ import org.telegram.messenger.MediaController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.SharedConfig; // TGFEED
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.NotificationsController;
@@ -186,6 +187,9 @@ public class StoriesController {
     }
 
     public void loadAllStories() {
+        if (SharedConfig.tgfeedHideStories) { // TGFEED: stories hidden
+            return;
+        }
         if (!firstLoad) {
             loadStories();
             loadStoriesRead();
@@ -247,6 +251,9 @@ public class StoriesController {
     }
 
     public boolean hasStories(long dialogId) {
+        if (SharedConfig.tgfeedHideStories) { // TGFEED: stories hidden
+            return false;
+        }
         if (dialogId == 0) {
             return false;
         }
@@ -264,6 +271,9 @@ public class StoriesController {
     }
 
     public TL_stories.PeerStories getStoriesFromFullPeer(long dialogId) {
+        if (SharedConfig.tgfeedHideStories) { // TGFEED: stories hidden
+            return null;
+        }
         if (dialogId > 0) {
             TLRPC.UserFull userFull = MessagesController.getInstance(currentAccount).getUserFull(dialogId);
             if (userFull != null && userFull.stories != null && !userFull.stories.checkedExpired) {
@@ -280,10 +290,16 @@ public class StoriesController {
     }
 
     public boolean hasStories() {
+        if (SharedConfig.tgfeedHideStories) { // TGFEED: stories hidden
+            return false;
+        }
         return (dialogListStories != null && dialogListStories.size() > 0) || hasSelfStories();
     }
 
     public void loadStories() {
+        if (SharedConfig.tgfeedHideStories) { // TGFEED: stories hidden
+            return;
+        }
         if (firstLoad) {
             loadingFromDatabase = true;
             storiesStorage.getAllStories(allStories -> {
@@ -305,6 +321,9 @@ public class StoriesController {
     }
 
     public void loadHiddenStories() {
+        if (SharedConfig.tgfeedHideStories) { // TGFEED: stories hidden
+            return;
+        }
         if (hasMoreHidden) {
             loadFromServer(true);
         }
@@ -678,6 +697,9 @@ public class StoriesController {
     }
 
     public TL_stories.PeerStories getStories(long peerId) {
+        if (SharedConfig.tgfeedHideStories) { // TGFEED: stories hidden
+            return null;
+        }
         return allStoriesMap.get(peerId);
     }
 
@@ -795,6 +817,9 @@ public class StoriesController {
     }
 
     public void processUpdate(TL_stories.TL_updateStory updateStory) {
+        if (SharedConfig.tgfeedHideStories) { // TGFEED: stories hidden
+            return;
+        }
         //stage queue
         if (updateStory.story == null) {
             return;
@@ -1552,6 +1577,9 @@ public class StoriesController {
     }
 
     public void loadNextStories(boolean hidden) {
+        if (SharedConfig.tgfeedHideStories) { // TGFEED: stories hidden
+            return;
+        }
         if (hidden ? hasMoreHidden : hasMore) {
             loadFromServer(hidden);
         }
@@ -1747,6 +1775,9 @@ public class StoriesController {
     }
 
     public boolean hasHiddenStories() {
+        if (SharedConfig.tgfeedHideStories) { // TGFEED: stories hidden
+            return false;
+        }
         return !hiddenListStories.isEmpty();
     }
 
@@ -4276,6 +4307,9 @@ public class StoriesController {
     }
 
     public boolean hasOnlySelfStories() {
+        if (SharedConfig.tgfeedHideStories) { // TGFEED: stories hidden
+            return false;
+        }
         return hasSelfStories() && (getDialogListStories().isEmpty() || (getDialogListStories().size() == 1 && DialogObject.getPeerDialogId(getDialogListStories().get(0).peer) == UserConfig.getInstance(currentAccount).clientUserId));
     }
 

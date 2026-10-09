@@ -7365,7 +7365,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 showArchiveHelp();
             }
         }
-        if (canShowStoryHint && !storyHintShown && storyHint != null && storiesEnabled) {
+        if (canShowStoryHint && !storyHintShown && storyHint != null && storiesEnabled && !SharedConfig.tgfeedHideStories) { // TGFEED
             storyHintShown = true;
             canShowStoryHint = false;
             storyHint.show();
@@ -8849,7 +8849,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             floatingButton3.setButtonVisible(isVisible, animated);
         }
         if (floatingButtonStories != null) {
-            floatingButtonStories.setButtonVisible(isVisible, animated);
+            floatingButtonStories.setButtonVisible(isVisible && !SharedConfig.tgfeedHideStories, animated); // TGFEED
         }
     }
 
@@ -10850,6 +10850,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         } else if (id == NotificationCenter.storiesUpdated) {
             updateStoriesVisibility(wasDrawn);
             updateVisibleRows(0);
+            updateFloatingButtonVisibility(false); // TGFEED: the stories camera follows the switch
         } else if (id == NotificationCenter.storiesEnabledUpdate) {
             updateStoriesPosting();
         } else if (id == NotificationCenter.unconfirmedAuthUpdate) {
@@ -12750,7 +12751,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
         boolean onlySelfStories = !isArchive() && getStoriesController().hasOnlySelfStories();
         boolean newVisibility;
-        if (communityId != 0) {
+        if (SharedConfig.tgfeedHideStories) { // TGFEED: stories hidden
+            newVisibility = false;
+            onlySelfStories = false;
+        } else if (communityId != 0) {
             newVisibility = false;
         } else if (isArchive()) {
             newVisibility = !getStoriesController().getHiddenList().isEmpty();

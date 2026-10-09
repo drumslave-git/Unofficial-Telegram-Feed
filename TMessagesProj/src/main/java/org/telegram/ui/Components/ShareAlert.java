@@ -440,7 +440,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
 
 
         this.resourcesProvider = theme;
-        this.includeStory = includeStory;
+        this.includeStory = includeStory && !SharedConfig.tgfeedHideStories; // TGFEED
 
         parentActivity = AndroidUtilities.findActivity(context);
 
@@ -3004,7 +3004,7 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
                     view = new ShareDialogCell(context, ShareDialogCell.TYPE_SHARE, resourcesProvider) {
                         @Override
                         protected String repostToCustomName() {
-                            if (includeStoryFromMessage) {
+                            if (includeStoryFromMessage && !SharedConfig.tgfeedHideStories) { // TGFEED
                                 return LocaleController.getString(R.string.RepostToStory);
                             }
                             return super.repostToCustomName();

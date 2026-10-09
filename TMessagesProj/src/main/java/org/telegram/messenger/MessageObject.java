@@ -6690,9 +6690,16 @@ public class MessageObject {
             } else if (getMedia(messageOwner) instanceof TLRPC.TL_messageMediaInvoice) {
                 type = TYPE_TEXT;
             } else if (getMedia(messageOwner) instanceof TLRPC.TL_messageMediaStory) {
-                type = getMedia(messageOwner).via_mention ? TYPE_STORY_MENTION : TYPE_STORY;
-                if (type == TYPE_STORY_MENTION) {
-                    contentType = 1;
+                if (SharedConfig.tgfeedHideStories) { // TGFEED: stories hidden, the message is plain text
+                    type = TYPE_TEXT;
+                    if (TextUtils.isEmpty(messageText)) {
+                        messageText = LocaleController.getString(R.string.Story);
+                    }
+                } else {
+                    type = getMedia(messageOwner).via_mention ? TYPE_STORY_MENTION : TYPE_STORY;
+                    if (type == TYPE_STORY_MENTION) {
+                        contentType = 1;
+                    }
                 }
             }
         } else if (currentEvent != null && currentEvent.action instanceof TLRPC.TL_channelAdminLogEventActionChangeWallpaper) {

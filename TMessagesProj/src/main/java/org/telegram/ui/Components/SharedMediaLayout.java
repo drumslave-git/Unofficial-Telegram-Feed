@@ -3831,7 +3831,7 @@ public class SharedMediaLayout extends FrameLayout implements NotificationCenter
     }
 
     protected boolean includeStories() {
-        return true;
+        return !SharedConfig.tgfeedHideStories; // TGFEED
     }
 
     protected boolean includeSavedDialogs() {

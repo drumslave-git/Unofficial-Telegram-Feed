@@ -204,6 +204,9 @@ public class ProfileStoriesView extends View implements NotificationCenter.Notif
         if (isTopic) {
             return;
         }
+        if (SharedConfig.tgfeedHideStories) { // TGFEED: no story ring
+            peerStories = null;
+        }
         final boolean me = dialogId == UserConfig.getInstance(currentAccount).getClientUserId();
         final int now = ConnectionsManager.getInstance(currentAccount).getCurrentTime();
         TL_stories.PeerStories userFullStories = MessagesController.getInstance(currentAccount).getStoriesController().getStoriesFromFullPeer(dialogId);

@@ -59,6 +59,7 @@ The root `build.gradle` holds the directory lookup (`tgfeedSecretsDir`) and the 
 ## 5. Code layout
 
 - The fork's own code is in the package `org.unofficial.telegramfeed` under `TMessagesProj/src/main/java`, in the same module as Telegram's code so that it reaches Telegram's controllers, cells and fragments directly. Its resources carry the prefix `tgfeed_`.
+- The subpackage `org.unofficial.telegramfeed.core` holds the pure logic (the rule engine, the order of a feed's posts, the feed filters) and imports nothing from Android or Telegram. The plain JVM module `TMessagesProj_FeedTests` compiles that directory as its main source set and holds its JUnit 4 tests under `src/test/java`, so an Android import there breaks the tests' compilation.
 - Every edit to a Telegram file is marked on its changed lines with a `TGFEED` comment (`// TGFEED` in Java and gradle, `<!-- TGFEED -->` in XML), so that `git grep TGFEED` lists every point where the fork touches Telegram and an upstream merge conflict is read in context.
 - The fork's UI strings are in `TMessagesProj/src/main/res/values/strings.xml` (English) and `values-uk/strings.xml` (Ukrainian), among Telegram's strings. Telegram's build plugin (`buildSrc`, `TelegramStringsTask`) packs every string of both files, so the fork's strings need nothing else. Telegram's cloud language packs override only the keys they know; the fork's keys keep their local values in every language.
 
@@ -77,7 +78,7 @@ The remote `upstream` is https://github.com/DrKLO/Telegram.git. On every Telegra
 
 ## 8. Tests and CI
 
-`tool/ci.sh` builds the debug APK and runs the JVM unit tests of the app module, and exits with the first failing step's code; it needs `JAVA_HOME` and `ANDROID_HOME` as in section 2. `TMessagesProj_AppTests` holds Telegram's instrumented tests and is not run.
+`tool/ci.sh` runs the unit tests of `TMessagesProj_FeedTests` (`:TMessagesProj_FeedTests:test`) and builds the debug APK, and exits with the first failing step's code; it needs `JAVA_HOME` and `ANDROID_HOME` as in section 2. `TMessagesProj_AppTests` holds Telegram's instrumented tests and is not run.
 
 The gradle property `TGFEED_ABIS` (comma-separated ABI names) limits the ABIs the native code is built for; without it all four are built.
 

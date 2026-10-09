@@ -1,0 +1,26 @@
+// TGFEED: plain JVM unit tests of the fork's pure code. The module compiles the subpackage
+// org.unofficial.telegramfeed.core straight from TMessagesProj's source tree, without Android,
+// so that package stays free of Android classes.
+apply plugin: 'java-library'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+sourceSets {
+    main {
+        java.srcDirs = ['../TMessagesProj/src/main/java/org/unofficial/telegramfeed/core']
+    }
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}
+
+test {
+    testLogging {
+        events 'failed'
+        exceptionFormat 'full'
+    }
+}

@@ -958,7 +958,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
                     }
                     break;
             }
-            return formatString(R.string.TelegramVersion, String.format(Locale.US, "v%s (%d)\n%s", pInfo.versionName, code, abi));
+            // TGFEED: the fork's version, then the Telegram version it is built on
+            return formatString(R.string.TgfeedVersion, String.format(Locale.US, "%s (%d)", pInfo.versionName, code)) + "\n"
+                    + formatString(R.string.TelegramVersion, "v" + BuildVars.TELEGRAM_BASE_VERSION) + "\n" + abi;
         } catch (Exception e) {
             FileLog.e(e);
         }

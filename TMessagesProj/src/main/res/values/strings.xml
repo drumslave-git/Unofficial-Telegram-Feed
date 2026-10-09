@@ -3,6 +3,7 @@
     <string name="AppName">Unofficial Telegram Feed</string>
     <string name="AppLauncherLabel">TG Feed</string>
     <string name="TgfeedSettings">Unofficial Telegram Feed</string>
+    <string name="TgfeedVersion">Unofficial Telegram Feed %1$s</string>
     <string name="TgfeedHideStories">Hide stories</string>
     <string name="AppNameBeta">Telegram Beta</string>
     <string name="LanguageName">English</string>

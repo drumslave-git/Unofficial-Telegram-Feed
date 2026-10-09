@@ -28,6 +28,7 @@ public class BuildVars {
 
     public static int APP_ID = BuildConfig.APP_ID; // TGFEED: from the secrets dir at build time
     public static String APP_HASH = BuildConfig.APP_HASH; // TGFEED
+    public static String TELEGRAM_BASE_VERSION = BuildConfig.TELEGRAM_BASE_VERSION; // TGFEED
 
     // SafetyNet key for Google Identity SDK, set it to empty to disable
     public static String SAFETYNET_KEY = "AIzaSyDqt8P-7F7CPCseMkOiVRgb1LY8RN1bvH8";

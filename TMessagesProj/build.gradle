@@ -156,6 +156,8 @@ android {
         def tgfeedTelegram = rootProject.ext.tgfeedReadSecretJson("telegram.json")
         buildConfigField "int", "APP_ID", Integer.parseInt(tgfeedTelegram.TG_API_ID.toString()).toString()
         buildConfigField "String", "APP_HASH", "\"" + tgfeedTelegram.TG_API_HASH + "\""
+        // TGFEED: the Telegram version the fork is built on, shown under the fork's own version
+        buildConfigField "String", "TELEGRAM_BASE_VERSION", "\"" + TELEGRAM_BASE_VERSION + "\""
 
         externalNativeBuild {
             cmake {

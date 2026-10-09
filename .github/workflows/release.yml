@@ -1,0 +1,76 @@
+name: release
+# A signed release APK (all four ABIs) for a version tag, published on the GitHub release
+# of that tag. Repository secrets: TG_API_ID, TG_API_HASH, GOOGLE_SERVICES_JSON_BASE64,
+# ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+# (docs/ARCHITECTURE.md, Secrets and Releases).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build, e.g. v0.1.0
+        required: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          submodules: recursive
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: NDK and CMake
+        run: echo y | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" "cmake;3.22.1" > /dev/null
+      - name: Secrets from repository secrets
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for v in TG_API_ID TG_API_HASH GOOGLE_SERVICES_JSON_BASE64 ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Missing repository secret $v"
+              exit 1
+            fi
+          done
+          mkdir -p secrets
+          printf '{"TG_API_ID": "%s", "TG_API_HASH": "%s"}\n' "$TG_API_ID" "$TG_API_HASH" > secrets/telegram.json
+          echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 -d > secrets/google-services.json
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > TMessagesProj/config/release.keystore
+      - name: Release build
+        env:
+          ORG_GRADLE_PROJECT_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          ./gradlew --console=plain :TMessagesProj_App:assembleAfatRelease
+          tag='${{ inputs.tag || github.ref_name }}'
+          mkdir -p build/release
+          cp TMessagesProj_App/build/outputs/apk/afat/release/app.apk "build/release/unofficial-telegram-feed-${tag}.apk"
+          ls -la build/release
+      - name: Remove secrets and signing material
+        if: always()
+        run: |
+          rm -rf secrets
+          git checkout -- TMessagesProj/config/release.keystore
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-apk
+          path: build/release/*.apk
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          files: build/release/*.apk

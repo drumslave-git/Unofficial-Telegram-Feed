@@ -1,0 +1,49 @@
+name: ci
+# The debug APK and the unit tests on every push (tool/ci.sh), for one ABI to keep the native
+# build short. Needs the repository secrets TG_API_ID, TG_API_HASH and
+# GOOGLE_SERVICES_JSON_BASE64 (docs/ARCHITECTURE.md, Secrets).
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: NDK and CMake
+        run: echo y | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" "cmake;3.22.1" > /dev/null
+      - name: Secrets from repository secrets
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          for v in TG_API_ID TG_API_HASH GOOGLE_SERVICES_JSON_BASE64; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Missing repository secret $v"
+              exit 1
+            fi
+          done
+          mkdir -p secrets
+          printf '{"TG_API_ID": "%s", "TG_API_HASH": "%s"}\n' "$TG_API_ID" "$TG_API_HASH" > secrets/telegram.json
+          echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 -d > secrets/google-services.json
+      - name: Debug build and unit tests
+        env:
+          ORG_GRADLE_PROJECT_TGFEED_ABIS: arm64-v8a
+        run: tool/ci.sh
+      - name: Remove secrets
+        if: always()
+        run: rm -rf secrets
+      - uses: actions/upload-artifact@v7
+        with:
+          name: debug-apk
+          path: TMessagesProj_App/build/outputs/apk/afat/debug/app.apk

@@ -147,6 +147,11 @@ android {
 
         multiDexEnabled true
 
+        // TGFEED: the gradle property TGFEED_ABIS (comma-separated) limits the ABIs built; CI uses it.
+        if (project.hasProperty('TGFEED_ABIS')) {
+            ndk { abiFilters.addAll(project.property('TGFEED_ABIS').split(',')) }
+        }
+
         // TGFEED: Telegram API credentials come from the secrets dir (see the root build.gradle).
         def tgfeedTelegram = rootProject.ext.tgfeedReadSecretJson("telegram.json")
         buildConfigField "int", "APP_ID", Integer.parseInt(tgfeedTelegram.TG_API_ID.toString()).toString()

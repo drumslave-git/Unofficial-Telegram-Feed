@@ -78,3 +78,19 @@ The remote `upstream` is https://github.com/DrKLO/Telegram.git. On every Telegra
 ## 8. Tests and CI
 
 `tool/ci.sh` builds the debug APK and runs the JVM unit tests of the app module, and exits with the first failing step's code; it needs `JAVA_HOME` and `ANDROID_HOME` as in section 2. `TMessagesProj_AppTests` holds Telegram's instrumented tests and is not run.
+
+The gradle property `TGFEED_ABIS` (comma-separated ABI names) limits the ABIs the native code is built for; without it all four are built.
+
+`.github/workflows/ci.yml` runs `tool/ci.sh` on every push and pull request on an Ubuntu runner with Temurin 17, the pinned NDK and CMake, for `arm64-v8a` only, and keeps the debug APK as the artifact `debug-apk`. It writes `secrets/` from the repository secrets `TG_API_ID`, `TG_API_HASH` and `GOOGLE_SERVICES_JSON_BASE64` (`base64 -w0 google-services.json`) and fails when one is missing.
+
+## 9. Releases
+
+A tag `v<version>` pushed to GitHub runs `.github/workflows/release.yml` (it can also be started by hand with an existing tag). It builds `:TMessagesProj_App:assembleAfatRelease` with all four ABIs, signed with the keystore from the secret `ANDROID_KEYSTORE_BASE64` (`base64 -w0 release.keystore`, written over the dummy `TMessagesProj/config/release.keystore` in the runner's checkout) and the gradle properties `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS` and `RELEASE_KEY_PASSWORD` from the secrets `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`, and publishes `unofficial-telegram-feed-<tag>.apk` on the tag's GitHub release. It needs the same three secrets as `ci.yml` and fails when any secret is missing.
+
+The keystore is created once, locally, and kept out of git:
+
+```bash
+keytool -genkey -v -keystore release.keystore -keyalg RSA -keysize 2048 -validity 10000 -alias <alias>
+```
+
+A local signed build puts that keystore at `TMessagesProj/config/release.keystore` and passes the three properties on the command line (`-PRELEASE_STORE_PASSWORD=...`); the dummy keystore and passwords in `gradle.properties` are Telegram's and sign nothing that is published.

@@ -11,7 +11,7 @@ A fork of the official Telegram app for Android (DrKLO/Telegram) with three addi
 ## Session end (mandatory)
 
 1. Update `PLAN.md`: remove the finished task, add new ones, update **Current phase** and **Next task**. PLAN.md holds open work only.
-2. Commit with a conventional message (`feat:`, `fix:`, `docs:`, `chore:`, `spike:`), one commit per task. Include the task id, e.g. `feat(P2-2): feeds tab`.
+2. Commit with a conventional message (`feat:`, `fix:`, `docs:`, `chore:`, `spike:`), one commit per task. Include the task id as the scope, e.g. `feat(P2-2): feeds tab`. The type decides the release: `feat` and `fix` on `master` publish a new version by themselves (`docs/ARCHITECTURE.md`, Releases).
 3. Never leave work uncommitted at the end of a session.
 
 ## Rules

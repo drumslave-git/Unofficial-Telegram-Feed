@@ -1,19 +1,25 @@
 name: release
-# A signed release APK (all four ABIs) for a version tag, published on the GitHub release
-# of that tag. Repository secrets: TG_API_ID, TG_API_HASH, GOOGLE_SERVICES_JSON_BASE64,
+# Automatic releases. On every push to master this computes the next version from the
+# conventional commits since the last tag vX.Y.Z (tool/next_version.sh: feat raises the
+# minor, fix and perf the patch, a breaking change the major, or the minor while 0.x;
+# other commit types alone release nothing). When a release is due it runs the unit
+# tests, builds the signed release APK with all four ABIs, tags the commit and publishes
+# the APK with a changelog on the GitHub release.
+#
+# Repository secrets: TG_API_ID, TG_API_HASH, GOOGLE_SERVICES_JSON_BASE64,
 # ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
 # (docs/ARCHITECTURE.md, Secrets and Releases).
 on:
   push:
-    tags: ['v*']
+    branches: [master]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: Existing version tag to build, e.g. v0.1.0
-        required: true
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  apk:
+  release:
     runs-on: ubuntu-latest
     timeout-minutes: 240
     permissions:
@@ -21,16 +27,23 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
           submodules: recursive
-      - uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
-      - name: NDK and CMake
-        run: echo y | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" "cmake;3.22.1" > /dev/null
+      - name: Next version from the commits
+        id: v
+        run: |
+          # Only the tip of master is released: an older commit would compute a version
+          # that a newer run may already have taken.
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse origin/master)" ]; then
+            echo "not the tip of master, nothing to do"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          tool/next_version.sh --notes "$RUNNER_TEMP/notes.md" --github-output "$GITHUB_OUTPUT"
+          echo "code=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/notes.md"
       - name: Secrets from repository secrets
+        if: steps.v.outputs.release == 'true'
         env:
           TG_API_ID: ${{ secrets.TG_API_ID }}
           TG_API_HASH: ${{ secrets.TG_API_HASH }}
@@ -50,30 +63,47 @@ jobs:
           printf '{"TG_API_ID": "%s", "TG_API_HASH": "%s"}\n' "$TG_API_ID" "$TG_API_HASH" > secrets/telegram.json
           echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 -d > secrets/google-services.json
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > TMessagesProj/config/release.keystore
-      - name: Release build
+      - uses: actions/setup-java@v6
+        if: steps.v.outputs.release == 'true'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.v.outputs.release == 'true'
+      - name: NDK and CMake
+        if: steps.v.outputs.release == 'true'
+        run: echo y | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" "cmake;3.22.1" > /dev/null
+      - name: Unit tests and release build
+        if: steps.v.outputs.release == 'true'
         env:
+          ORG_GRADLE_PROJECT_APP_VERSION_NAME: ${{ steps.v.outputs.version }}
+          ORG_GRADLE_PROJECT_APP_VERSION_CODE: ${{ steps.v.outputs.code }}
           ORG_GRADLE_PROJECT_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ORG_GRADLE_PROJECT_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ORG_GRADLE_PROJECT_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          ./gradlew --console=plain :TMessagesProj_App:assembleAfatRelease
-          tag='${{ inputs.tag || github.ref_name }}'
+          ./gradlew --console=plain :TMessagesProj_FeedTests:test :TMessagesProj_App:assembleAfatRelease
           mkdir -p build/release
-          cp TMessagesProj_App/build/outputs/apk/afat/release/app.apk "build/release/unofficial-telegram-feed-${tag}.apk"
-          ls -la build/release
+          cp TMessagesProj_App/build/outputs/apk/afat/release/app.apk "build/release/unofficial-telegram-feed-${{ steps.v.outputs.version }}.apk"
           base=$(sed -n 's/^TELEGRAM_BASE_VERSION=//p' gradle.properties)
-          echo "Unofficial Telegram Feed ${tag#v}, built on Telegram $base." > build/release/notes.md
+          { echo "Unofficial Telegram Feed ${{ steps.v.outputs.version }}, built on Telegram $base."; echo; cat "$RUNNER_TEMP/notes.md"; } > build/release/notes.md
+          ls -la build/release
       - name: Remove secrets and signing material
         if: always()
         run: |
           rm -rf secrets
           git checkout -- TMessagesProj/config/release.keystore
       - uses: actions/upload-artifact@v7
+        if: steps.v.outputs.release == 'true'
         with:
           name: release-apk
           path: build/release/*.apk
-      - uses: softprops/action-gh-release@v3
+      - name: Tag and publish
+        if: steps.v.outputs.release == 'true'
+        uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ inputs.tag || github.ref_name }}
+          tag_name: ${{ steps.v.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.v.outputs.version }}
           body_path: build/release/notes.md
           files: build/release/*.apk

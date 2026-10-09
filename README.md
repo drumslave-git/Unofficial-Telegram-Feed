@@ -14,7 +14,7 @@ Everything else is the official app, unchanged. This app is not made by Telegram
 
 ## Install
 
-Release APKs are on the [GitHub Releases](https://github.com/drumslave-git/Unofficial-Telegram-Feed/releases) page, one APK for every version with all four ABIs. The app installs beside the official Telegram app and logs in as its own session. Versions are the fork's own (`0.1.0`, `0.2.0`, ...); the Telegram version each one is built on is in the release notes and in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Release APKs are on the [GitHub Releases](https://github.com/drumslave-git/Unofficial-Telegram-Feed/releases) page, one APK for every version with all four ABIs. The app installs beside the official Telegram app and logs in as its own session. Releases are automatic: every push to `master` with a feature or a fix is versioned from its commits, tagged and published, and the release notes name the Telegram version it is built on.
 
 ## Build
 

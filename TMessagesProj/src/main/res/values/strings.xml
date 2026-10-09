@@ -18,6 +18,9 @@
     <string name="TgfeedEditChannels">Edit channels</string>
     <string name="TgfeedUnreadPosts">Unread posts</string>
     <string name="TgfeedNoPosts">No posts yet.</string>
+    <string name="TgfeedComments">Comments</string>
+    <string name="TgfeedShowInChat">Show in chat</string>
+    <string name="TgfeedForwarded">Forwarded</string>
     <string name="TgfeedFeedsTab">Feeds</string>
     <string name="TgfeedNewFeed">New feed</string>
     <string name="TgfeedFeedName">Feed name</string>

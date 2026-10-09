@@ -18,6 +18,9 @@
     <string name="TgfeedEditChannels">Редагувати канали</string>
     <string name="TgfeedUnreadPosts">Непрочитані дописи</string>
     <string name="TgfeedNoPosts">Ще немає дописів.</string>
+    <string name="TgfeedComments">Коментарі</string>
+    <string name="TgfeedShowInChat">Показати в каналі</string>
+    <string name="TgfeedForwarded">Переслано</string>
     <string name="TgfeedFeedsTab">Стрічки</string>
     <string name="TgfeedNewFeed">Нова стрічка</string>
     <string name="TgfeedFeedName">Назва стрічки</string>

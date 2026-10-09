@@ -22,6 +22,11 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.ChatObject;
+import org.telegram.messenger.FileLoader;
+import org.telegram.messenger.ImageReceiver;
+import org.telegram.messenger.MediaController;
+import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.NotificationCenter;
@@ -36,6 +41,17 @@ import org.telegram.ui.Cells.ChatLoadingCell;
 import org.telegram.ui.Cells.ChatMessageCell;
 import org.telegram.ui.Cells.ChatUnreadCell;
 import org.telegram.ui.ChatActivity;
+import org.telegram.ui.DialogsActivity;
+import org.telegram.ui.PhotoViewer;
+import org.telegram.ui.ReportBottomSheet;
+import org.telegram.ui.ActionBar.ActionBarMenu;
+import org.telegram.ui.Components.BulletinFactory;
+import org.telegram.ui.Components.ItemOptions;
+import org.telegram.ui.Components.NumberTextView;
+import org.telegram.ui.Components.ReactionsContainerLayout;
+import org.telegram.ui.Components.Reactions.ReactionsLayoutInBubble;
+import org.telegram.ui.Components.ShareAlert;
+import org.telegram.ui.TopicsFragment;
 import org.telegram.ui.Components.CounterView;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.RecyclerListView;
@@ -48,6 +64,8 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
+import java.io.File;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
@@ -57,9 +75,12 @@ import java.util.List;
  * and is merged by date; posts older than the oldest loaded post of any channel that still has
  * history wait until that channel has loaded as far, so the list never shows a gap.
  */
-public class FeedActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate {
+public class FeedActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate, DialogsActivity.DialogsActivityDelegate {
 
     private static final int MENU_EDIT = 1;
+    private static final int ACTION_COPY = 10;
+    private static final int ACTION_FORWARD = 11;
+    private static final int ACTION_SHARE = 12;
     private static final int INITIAL_COUNT = 30;
     private static final int OLDER_COUNT = 50;
 
@@ -103,6 +124,41 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
     private FrameLayout pagedownButton;
     private CounterView pagedownCounter;
     private TextView emptyView;
+    private NumberTextView selectedCountView;
+    /** The selected posts in selection mode, keyed by channel and id, in selection order. */
+    private final LinkedHashMap<Long, MessageObject> selectedPosts = new LinkedHashMap<>();
+    private final PhotoViewer.PhotoViewerProvider photoViewerProvider = new PhotoViewer.EmptyPhotoViewerProvider() {
+        @Override
+        public PhotoViewer.PlaceProviderObject getPlaceForPhoto(MessageObject messageObject, TLRPC.FileLocation fileLocation, int index, boolean needPreview, boolean closing) {
+            if (listView == null || messageObject == null) {
+                return null;
+            }
+            for (int a = 0; a < listView.getChildCount(); a++) {
+                View view = listView.getChildAt(a);
+                if (!(view instanceof ChatMessageCell)) {
+                    continue;
+                }
+                ChatMessageCell cell = (ChatMessageCell) view;
+                MessageObject message = cell.getMessageObject();
+                if (message == null || message.getId() != messageObject.getId() || message.getDialogId() != messageObject.getDialogId()) {
+                    continue;
+                }
+                ImageReceiver imageReceiver = cell.getPhotoImage();
+                int[] coords = new int[2];
+                view.getLocationInWindow(coords);
+                PhotoViewer.PlaceProviderObject object = new PhotoViewer.PlaceProviderObject();
+                object.viewX = coords[0];
+                object.viewY = coords[1];
+                object.parentView = listView;
+                object.imageReceiver = imageReceiver;
+                object.thumb = imageReceiver.getBitmapSafe();
+                object.radius = imageReceiver.getRoundRadius(true);
+                object.isEvent = false;
+                return object;
+            }
+            return null;
+        }
+    };
     private boolean scrolling;
     private final Runnable hideFloatingDate = () -> {
         if (floatingDateView != null) {
@@ -174,12 +230,36 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             @Override
             public void onItemClick(int id) {
                 if (id == -1) {
-                    finishFragment();
+                    if (actionBar.isActionModeShowed()) {
+                        clearSelection();
+                    } else {
+                        finishFragment();
+                    }
                 } else if (id == MENU_EDIT) {
                     presentFragment(new FeedEditActivity(feedId));
+                } else if (id == ACTION_COPY) {
+                    copyPosts(new ArrayList<>(selectedPosts.values()));
+                    clearSelection();
+                } else if (id == ACTION_FORWARD) {
+                    forwardPosts(new ArrayList<>(selectedPosts.values()));
+                } else if (id == ACTION_SHARE) {
+                    ArrayList<MessageObject> list = new ArrayList<>(selectedPosts.values());
+                    clearSelection();
+                    if (!list.isEmpty()) {
+                        sharePost(list.get(0));
+                    }
                 }
             }
         });
+        ActionBarMenu actionMode = actionBar.createActionMode();
+        selectedCountView = new NumberTextView(actionMode.getContext());
+        selectedCountView.setTextSize(18);
+        selectedCountView.setTypeface(AndroidUtilities.bold());
+        selectedCountView.setTextColor(Theme.getColor(Theme.key_actionBarActionModeDefaultIcon));
+        actionMode.addView(selectedCountView, LayoutHelper.createLinear(0, LayoutHelper.MATCH_PARENT, 1.0f, 65, 0, 0, 0));
+        actionMode.addItemWithWidth(ACTION_COPY, R.drawable.msg_copy, dp(54), LocaleController.getString(R.string.Copy));
+        actionMode.addItemWithWidth(ACTION_SHARE, R.drawable.msg_share, dp(54), LocaleController.getString(R.string.ShareFile));
+        actionMode.addItemWithWidth(ACTION_FORWARD, R.drawable.msg_forward, dp(54), LocaleController.getString(R.string.Forward));
 
         contentView = new SizeNotifierFrameLayout(context) {
             @Override
@@ -298,6 +378,31 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         listView.setLayoutManager(layoutManager);
         adapter = new Adapter(context);
         listView.setAdapter(adapter);
+        listView.setOnItemClickListener((RecyclerListView.OnItemClickListenerExtended) (view, position, x, y) -> {
+            if (!(view instanceof ChatMessageCell)) {
+                return;
+            }
+            MessageObject message = ((ChatMessageCell) view).getMessageObject();
+            if (message == null || message.getId() <= 0) {
+                return;
+            }
+            if (!selectedPosts.isEmpty()) {
+                toggleSelection(message);
+            } else {
+                showPostMenu((ChatMessageCell) view, message);
+            }
+        });
+        listView.setOnItemLongClickListener((view, position) -> {
+            if (!(view instanceof ChatMessageCell)) {
+                return false;
+            }
+            MessageObject message = ((ChatMessageCell) view).getMessageObject();
+            if (message == null || message.getId() <= 0) {
+                return false;
+            }
+            toggleSelection(message);
+            return true;
+        });
         listView.setOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
@@ -890,6 +995,251 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         }
     }
 
+    // ---------------------------------------------------------------- post actions
+
+    @Override
+    public boolean onBackPressed(boolean invoked) {
+        if (!selectedPosts.isEmpty()) {
+            if (invoked) {
+                clearSelection();
+            }
+            return false;
+        }
+        return super.onBackPressed(invoked);
+    }
+
+    private void toggleSelection(MessageObject message) {
+        long k = key(-message.getDialogId(), message.getId());
+        if (selectedPosts.remove(k) == null) {
+            if (selectedPosts.size() >= 100) {
+                return;
+            }
+            selectedPosts.put(k, message);
+        }
+        if (selectedPosts.isEmpty()) {
+            clearSelection();
+            return;
+        }
+        if (!actionBar.isActionModeShowed()) {
+            actionBar.showActionMode();
+        }
+        selectedCountView.setNumber(selectedPosts.size(), true);
+        updateSelectionCells();
+    }
+
+    private void clearSelection() {
+        selectedPosts.clear();
+        if (actionBar != null && actionBar.isActionModeShowed()) {
+            actionBar.hideActionMode();
+        }
+        updateSelectionCells();
+    }
+
+    private void updateSelectionCells() {
+        if (listView == null) {
+            return;
+        }
+        for (int i = 0; i < listView.getChildCount(); i++) {
+            View child = listView.getChildAt(i);
+            if (child instanceof ChatMessageCell) {
+                MessageObject message = ((ChatMessageCell) child).getMessageObject();
+                if (message != null) {
+                    applySelection((ChatMessageCell) child, message, true);
+                }
+            }
+        }
+    }
+
+    private void applySelection(ChatMessageCell cell, MessageObject message, boolean animated) {
+        boolean selecting = !selectedPosts.isEmpty();
+        boolean selected = selecting && selectedPosts.containsKey(key(-message.getDialogId(), message.getId()));
+        cell.setCheckBoxVisible(selecting, animated);
+        cell.setDrawSelectionBackground(selected);
+        cell.setChecked(selected, selected, animated);
+    }
+
+    private static CharSequence textOf(MessageObject message) {
+        if (message.caption != null && message.caption.length() > 0) {
+            return message.caption;
+        }
+        return message.messageText;
+    }
+
+    private String postLink(MessageObject message) {
+        TLRPC.Chat chat = getMessagesController().getChat(-message.getDialogId());
+        String username = chat == null ? null : ChatObject.getPublicUsername(chat);
+        if (username == null) {
+            return null;
+        }
+        return "https://" + getMessagesController().linkPrefix + "/" + username + "/" + message.getId();
+    }
+
+    private String mediaPath(MessageObject message) {
+        String path = message.messageOwner.attachPath;
+        if (path != null && !path.isEmpty() && !new File(path).exists()) {
+            path = null;
+        }
+        if (path == null || path.isEmpty()) {
+            File f = FileLoader.getInstance(currentAccount).getPathToMessage(message.messageOwner);
+            if (f != null && f.exists()) {
+                path = f.getPath();
+            }
+        }
+        return path == null || path.isEmpty() ? null : path;
+    }
+
+    private void showPostMenu(ChatMessageCell cell, MessageObject message) {
+        TLRPC.Chat chat = getMessagesController().getChat(-message.getDialogId());
+        ItemOptions options = ItemOptions.makeOptions(this, cell);
+
+        MessageObject.GroupedMessages group = message.hasValidGroupId() ? groups.get(message.getGroupId() ^ message.getDialogId()) : null;
+        MessageObject reactionsTarget = group != null && group.findPrimaryMessageObject() != null ? group.findPrimaryMessageObject() : message;
+        TLRPC.ChatFull chatFull = chat == null ? null : getMessagesController().getChatFull(chat.id);
+        boolean reactionsAvailable = chatFull == null || !(chatFull.available_reactions instanceof TLRPC.TL_chatReactionsNone);
+        if (reactionsAvailable) {
+            ReactionsContainerLayout reactionsLayout = new ReactionsContainerLayout(ReactionsContainerLayout.TYPE_DEFAULT, this, getContext(), currentAccount, getResourceProvider());
+            reactionsLayout.setPadding(dp(4), dp(4), dp(4), dp(4));
+            reactionsLayout.setDelegate(new ReactionsContainerLayout.ReactionsContainerDelegate() {
+                @Override
+                public void onReactionClicked(View view, ReactionsLayoutInBubble.VisibleReaction visibleReaction, boolean longpress, boolean addToRecent) {
+                    options.dismiss();
+                    sendReaction(reactionsTarget, visibleReaction);
+                }
+
+                @Override
+                public void hideMenu() {
+                    options.dismiss();
+                }
+            });
+            options.addView(reactionsLayout, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, (int) (52 + reactionsLayout.getTopOffset() / AndroidUtilities.density), Gravity.RIGHT, 0, 0, 0, 0));
+            reactionsLayout.setMessage(reactionsTarget, chatFull, true);
+        }
+
+        CharSequence text = textOf(message);
+        String path = (message.isPhoto() || message.isVideo()) ? mediaPath(message) : null;
+        options
+                .addIf(message.hasReplies(), R.drawable.msg_viewreplies, LocaleController.getString(R.string.TgfeedComments), () -> openChannel(chat, message.getId()))
+                .addIf(text != null && text.length() > 0, R.drawable.msg_copy, LocaleController.getString(R.string.Copy), () -> copyPosts(Collections.singletonList(message)))
+                .add(R.drawable.msg_forward, LocaleController.getString(R.string.Forward), () -> forwardPosts(group != null ? new ArrayList<>(group.messages) : new ArrayList<>(Collections.singletonList(message))))
+                .add(R.drawable.msg_share, LocaleController.getString(R.string.ShareFile), () -> sharePost(message))
+                .addIf(path != null, R.drawable.msg_gallery, LocaleController.getString(R.string.SaveToGallery), () -> saveToGallery(message, path))
+                .add(R.drawable.msg_report, LocaleController.getString(R.string.ReportChat), () -> ReportBottomSheet.openMessage(this, message))
+                .add(R.drawable.msg_message, LocaleController.getString(R.string.TgfeedShowInChat), () -> openChannel(chat, message.getId()))
+                .show();
+    }
+
+    private void sendReaction(MessageObject message, ReactionsLayoutInBubble.VisibleReaction visibleReaction) {
+        if (visibleReaction == null) {
+            return;
+        }
+        boolean added = message.selectReaction(visibleReaction, false, false);
+        ArrayList<ReactionsLayoutInBubble.VisibleReaction> visibleReactions = new ArrayList<>(message.getChoosenReactions());
+        getSendMessagesHelper().sendReaction(message, visibleReactions, added ? visibleReaction : null, false, true, this, () -> {
+            if (adapter != null) {
+                adapter.notifyDataSetChanged();
+            }
+        });
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
+    }
+
+    private void copyPosts(List<MessageObject> list) {
+        StringBuilder builder = new StringBuilder();
+        List<MessageObject> ordered = new ArrayList<>(list);
+        Collections.sort(ordered, (a, b) -> Integer.compare(a.messageOwner.date, b.messageOwner.date));
+        for (MessageObject message : ordered) {
+            CharSequence text = textOf(message);
+            if (text == null || text.length() == 0) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append("\n\n");
+            }
+            builder.append(text);
+        }
+        if (builder.length() == 0) {
+            return;
+        }
+        AndroidUtilities.addToClipboard(builder.toString());
+        BulletinFactory.of(this).createCopyBulletin(LocaleController.getString(R.string.TextCopied)).show();
+    }
+
+    private ArrayList<MessageObject> forwarding;
+
+    private void forwardPosts(ArrayList<MessageObject> list) {
+        if (list.isEmpty()) {
+            return;
+        }
+        forwarding = list;
+        Bundle args = new Bundle();
+        args.putBoolean("onlySelect", true);
+        args.putInt("dialogsType", DialogsActivity.DIALOGS_TYPE_FORWARD);
+        args.putInt("messagesCount", list.size());
+        args.putBoolean("canSelectTopics", true);
+        DialogsActivity fragment = new DialogsActivity(args);
+        fragment.setDelegate(this);
+        presentFragment(fragment);
+    }
+
+    @Override
+    public boolean didSelectDialogs(DialogsActivity fragment, ArrayList<MessagesStorage.TopicKey> dids, CharSequence message, boolean param, boolean notify, int scheduleDate, int scheduleRepeatPeriod, TopicsFragment topicsFragment) {
+        if (forwarding == null || forwarding.isEmpty()) {
+            return false;
+        }
+        ArrayList<MessageObject> list = new ArrayList<>(forwarding);
+        Collections.sort(list, (a, b) -> Integer.compare(a.messageOwner.date, b.messageOwner.date));
+        forwarding = null;
+        for (MessagesStorage.TopicKey key : dids) {
+            getSendMessagesHelper().sendMessage(list, key.dialogId, false, false, notify, scheduleDate, 0);
+        }
+        fragment.finishFragment();
+        clearSelection();
+        BulletinFactory.of(this).createSimpleBulletin(R.raw.forward, LocaleController.getString(R.string.TgfeedForwarded)).show();
+        return true;
+    }
+
+    private void sharePost(MessageObject message) {
+        if (message == null || getParentActivity() == null) {
+            return;
+        }
+        showDialog(ShareAlert.createShareAlert(getParentActivity(), message, null, true, postLink(message), false));
+    }
+
+    private void saveToGallery(MessageObject message, String path) {
+        if (path == null || getParentActivity() == null) {
+            return;
+        }
+        MediaController.saveFile(path, getParentActivity(), message.isVideo() ? 1 : 0, null, null);
+        BulletinFactory.of(this).createDownloadBulletin(message.isVideo() ? BulletinFactory.FileType.VIDEO : BulletinFactory.FileType.PHOTO, getResourceProvider()).show();
+    }
+
+    /** Opens the viewer at the post, paging over the pictures and videos of the whole feed. */
+    private void openMedia(MessageObject message) {
+        if (message == null || getParentActivity() == null) {
+            return;
+        }
+        if (!(message.isPhoto() || message.isVideo() || message.isGif())) {
+            return;
+        }
+        ArrayList<MessageObject> media = new ArrayList<>();
+        int index = -1;
+        for (MessageObject m : messages) {
+            if (m.isDateObject || m.getId() <= 0 || !(m.isPhoto() || m.isVideo() || m.isGif())) {
+                continue;
+            }
+            if (m == message) {
+                index = media.size();
+            }
+            media.add(m);
+        }
+        if (index < 0) {
+            return;
+        }
+        PhotoViewer.getInstance().setParentActivity(this);
+        PhotoViewer.getInstance().openPhoto(media, index, 0, 0, 0, photoViewerProvider);
+    }
+
     // ---------------------------------------------------------------- adapter
 
     private class Adapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
@@ -967,6 +1317,39 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                     public boolean canPerformActions() {
                         return true;
                     }
+
+                    @Override
+                    public void didLongPress(ChatMessageCell cell, float x, float y) {
+                        if (cell.getMessageObject() != null && cell.getMessageObject().getId() > 0) {
+                            toggleSelection(cell.getMessageObject());
+                        }
+                    }
+
+                    @Override
+                    public void didPressImage(ChatMessageCell cell, float x, float y, boolean fullPreview) {
+                        openMedia(cell.getMessageObject());
+                    }
+
+                    @Override
+                    public void didPressSideButton(ChatMessageCell cell) {
+                        sharePost(cell.getMessageObject());
+                    }
+
+                    @Override
+                    public void didPressCommentButton(ChatMessageCell cell) {
+                        MessageObject message = cell.getMessageObject();
+                        if (message != null) {
+                            openChannel(getMessagesController().getChat(-message.getDialogId()), message.getId());
+                        }
+                    }
+
+                    @Override
+                    public void didPressReaction(ChatMessageCell cell, TLRPC.ReactionCount reaction, boolean longpress, float x, float y) {
+                        MessageObject message = cell.getMessageObject();
+                        if (message != null && reaction != null) {
+                            sendReaction(message, ReactionsLayoutInBubble.VisibleReaction.fromTL(reaction.reaction));
+                        }
+                    }
                 });
                 view = cell;
             } else if (viewType == 1) {
@@ -1037,6 +1420,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                 }
                 cell.setMessageObject(message, group, pinnedBottom, pinnedTop, false);
                 cell.setHighlighted(false);
+                applySelection(cell, message, false);
             } else if (view instanceof ChatActionCell) {
                 ChatActionCell cell = (ChatActionCell) view;
                 cell.setMessageObject(message);

@@ -58,12 +58,15 @@ import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.SizeNotifierFrameLayout;
 import org.unofficial.telegramfeed.core.Feed;
 import org.unofficial.telegramfeed.core.FeedOrder;
+import org.unofficial.telegramfeed.core.FeedFilter;
 import org.unofficial.telegramfeed.feeds.FeedsController;
+import org.unofficial.telegramfeed.feeds.PostFilter;
 
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -110,6 +113,14 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
     private final ArrayList<MessageObject> messages = new ArrayList<>();
     private final HashMap<Long, MessageObject.GroupedMessages> groups = new HashMap<>();
     private final HashMap<Long, Integer> stableIds = new HashMap<>();
+    /** The posts the filter leaves out, dropped or folded, keyed like {@link #posts}. */
+    private final HashSet<Long> hidden = new HashSet<>();
+    /** The folded posts that have a one-line row: one key per post or album. */
+    private final HashSet<Long> minimized = new HashSet<>();
+    /** The one line of each folded row. */
+    private final HashMap<Long, CharSequence> summaries = new HashMap<>();
+    /** The folded posts the reader opened with a tap. */
+    private final HashSet<Long> expanded = new HashSet<>();
     private int nextStableId = 10;
     private long unreadDividerKey;
     private boolean unreadDividerDecided;
@@ -379,6 +390,10 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         adapter = new Adapter(context);
         listView.setAdapter(adapter);
         listView.setOnItemClickListener((RecyclerListView.OnItemClickListenerExtended) (view, position, x, y) -> {
+            if (view instanceof MinimizedPostCell) {
+                expandPost(((MinimizedPostCell) view).getMessageObject());
+                return;
+            }
             if (!(view instanceof ChatMessageCell)) {
                 return;
             }
@@ -637,6 +652,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             }
             feed = updated;
             updateTitle();
+            expanded.clear();
             boolean changed = false;
             for (long channelId : feed.channelIds) {
                 if (!channels.containsKey(channelId)) {
@@ -658,8 +674,8 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             }
             if (changed) {
                 loadInitial();
-                rebuildRows();
             }
+            rebuildRows();
         } else if (id == NotificationCenter.updateInterfaces) {
             updatePagedownButton();
         }
@@ -694,10 +710,11 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                 new FeedOrder.Key(-a.getDialogId(), a.getId(), a.messageOwner.date),
                 new FeedOrder.Key(-b.getDialogId(), b.getId(), b.messageOwner.date)));
         Collections.reverse(shown);
+        ArrayList<MessageObject> visible = applyFilter(shown);
 
         groups.clear();
-        for (MessageObject message : shown) {
-            if (message.hasValidGroupId()) {
+        for (MessageObject message : visible) {
+            if (message.hasValidGroupId() && !minimized.contains(key(-message.getDialogId(), message.getId()))) {
                 long groupKey = message.getGroupId() ^ message.getDialogId();
                 MessageObject.GroupedMessages group = groups.get(groupKey);
                 if (group == null) {
@@ -712,14 +729,17 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             group.calculate();
         }
 
-        if (!unreadDividerDecided && !shown.isEmpty()) {
+        if (!unreadDividerDecided && !visible.isEmpty()) {
             boolean anyLoaded = false;
             for (ChannelState state : channels.values()) {
                 anyLoaded |= state.loadedOnce;
             }
             if (anyLoaded) {
-                for (int i = shown.size() - 1; i >= 0; i--) {
-                    MessageObject message = shown.get(i);
+                for (int i = visible.size() - 1; i >= 0; i--) {
+                    MessageObject message = visible.get(i);
+                    if (minimized.contains(key(-message.getDialogId(), message.getId()))) {
+                        continue;
+                    }
                     if (isUnread(message)) {
                         unreadDividerKey = key(-message.getDialogId(), message.getId());
                         break;
@@ -732,7 +752,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         messages.clear();
         int currentDay = Integer.MIN_VALUE;
         int currentDayStart = 0;
-        for (MessageObject message : shown) {
+        for (MessageObject message : visible) {
             Calendar calendar = Calendar.getInstance();
             calendar.setTimeInMillis(message.messageOwner.date * 1000L);
             int day = calendar.get(Calendar.YEAR) * 1000 + calendar.get(Calendar.DAY_OF_YEAR);
@@ -761,6 +781,117 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         adapter.notifyDataSetChanged();
         updateEmptyView();
         updatePagedownButton();
+    }
+
+    /**
+     * Drops what the feed's filter leaves out. A post or album the filter hides is gone, or,
+     * with "Show minimized", keeps its newest part as a one-line row; a part the reader opened
+     * is shown whole again. {@code shown} is newest first with album parts adjacent.
+     */
+    private ArrayList<MessageObject> applyFilter(ArrayList<MessageObject> shown) {
+        hidden.clear();
+        minimized.clear();
+        summaries.clear();
+        if (feed.filter.isEmpty()) {
+            return shown;
+        }
+        HashMap<Long, ArrayList<MessageObject>> albums = new HashMap<>();
+        for (MessageObject message : shown) {
+            if (message.hasValidGroupId()) {
+                long groupKey = message.getGroupId() ^ message.getDialogId();
+                ArrayList<MessageObject> parts = albums.get(groupKey);
+                if (parts == null) {
+                    parts = new ArrayList<>();
+                    albums.put(groupKey, parts);
+                }
+                parts.add(message);
+            }
+        }
+        HashSet<Long> judgedAlbums = new HashSet<>();
+        HashSet<Long> dropped = new HashSet<>();
+        for (MessageObject message : shown) {
+            ArrayList<MessageObject> parts;
+            if (message.hasValidGroupId()) {
+                long groupKey = message.getGroupId() ^ message.getDialogId();
+                if (!judgedAlbums.add(groupKey)) {
+                    continue;
+                }
+                parts = albums.get(groupKey);
+            } else {
+                parts = new ArrayList<>(1);
+                parts.add(message);
+            }
+            boolean opened = false;
+            for (MessageObject part : parts) {
+                opened |= expanded.contains(key(-part.getDialogId(), part.getId()));
+            }
+            if (opened) {
+                continue;
+            }
+            ArrayList<FeedFilter.Post> described = new ArrayList<>(parts.size());
+            for (MessageObject part : parts) {
+                described.add(PostFilter.describe(part));
+            }
+            List<FeedFilter.Post> kept = feed.filter.shownParts(described, feed.showWholePost);
+            if (kept.isEmpty()) {
+                for (int i = 0; i < parts.size(); i++) {
+                    long k = key(-parts.get(i).getDialogId(), parts.get(i).getId());
+                    hidden.add(k);
+                    if (feed.showMinimized && i == 0) {
+                        minimized.add(k);
+                        summaries.put(k, summary(parts));
+                    } else {
+                        dropped.add(k);
+                    }
+                }
+            } else {
+                for (int i = 0; i < parts.size(); i++) {
+                    if (!kept.contains(described.get(i))) {
+                        long k = key(-parts.get(i).getDialogId(), parts.get(i).getId());
+                        hidden.add(k);
+                        dropped.add(k);
+                    }
+                }
+            }
+        }
+        if (dropped.isEmpty()) {
+            return shown;
+        }
+        ArrayList<MessageObject> visible = new ArrayList<>(shown.size());
+        for (MessageObject message : shown) {
+            if (!dropped.contains(key(-message.getDialogId(), message.getId()))) {
+                visible.add(message);
+            }
+        }
+        return visible;
+    }
+
+    /** The one line of a folded post: the first caption of the album, oldest part first. */
+    private static CharSequence summary(ArrayList<MessageObject> parts) {
+        for (int i = parts.size() - 1; i >= 0; i--) {
+            if (!android.text.TextUtils.isEmpty(parts.get(i).messageOwner.message)) {
+                return PostFilter.summary(parts.get(i));
+            }
+        }
+        return PostFilter.summary(parts.get(parts.size() - 1));
+    }
+
+    /** Opens a folded post or album in place. */
+    private void expandPost(MessageObject message) {
+        if (message == null) {
+            return;
+        }
+        if (message.hasValidGroupId()) {
+            long groupKey = message.getGroupId() ^ message.getDialogId();
+            for (MessageObject post : posts.values()) {
+                if (post.hasValidGroupId() && (post.getGroupId() ^ post.getDialogId()) == groupKey) {
+                    expanded.add(key(-post.getDialogId(), post.getId()));
+                }
+            }
+        } else {
+            expanded.add(key(-message.getDialogId(), message.getId()));
+        }
+        rebuildRows();
     }
 
     private MessageObject dateRow(int dayStart, int day) {
@@ -795,7 +926,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             emptyView.setText(LocaleController.getString(R.string.TgfeedNoChannelsInFeed));
             emptyView.setVisibility(View.VISIBLE);
         } else if (messages.isEmpty() && allEnded()) {
-            emptyView.setText(LocaleController.getString(R.string.TgfeedNoPosts));
+            emptyView.setText(LocaleController.getString(hidden.isEmpty() ? R.string.TgfeedNoPosts : R.string.TgfeedNoPostsPassFilter));
             emptyView.setVisibility(View.VISIBLE);
         } else {
             emptyView.setVisibility(View.GONE);
@@ -854,7 +985,12 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                 unread += dialog.unread_count;
             }
         }
-        pagedownCounter.setCount(unread, true);
+        for (MessageObject post : posts.values()) {
+            if (hidden.contains(key(-post.getDialogId(), post.getId())) && isUnread(post)) {
+                unread--;
+            }
+        }
+        pagedownCounter.setCount(Math.max(0, unread), true);
     }
 
     private void restorePosition() {
@@ -931,6 +1067,8 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             message = ((ChatMessageCell) top).getMessageObject();
         } else if (top instanceof ChatActionCell) {
             message = ((ChatActionCell) top).getMessageObject();
+        } else if (top instanceof MinimizedPostCell) {
+            message = ((MinimizedPostCell) top).getMessageObject();
         }
         if (message == null || message.contentType == 2) {
             return;
@@ -952,10 +1090,12 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         HashMap<Long, MessageObject> newest = new HashMap<>();
         for (int i = 0; i < listView.getChildCount(); i++) {
             View child = listView.getChildAt(i);
-            if (!(child instanceof ChatMessageCell)) {
-                continue;
+            MessageObject message = null;
+            if (child instanceof ChatMessageCell) {
+                message = ((ChatMessageCell) child).getMessageObject();
+            } else if (child instanceof MinimizedPostCell) {
+                message = ((MinimizedPostCell) child).getMessageObject();
             }
-            MessageObject message = ((ChatMessageCell) child).getMessageObject();
             if (message == null || message.getId() <= 0) {
                 continue;
             }
@@ -965,7 +1105,8 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                 newest.put(channelId, message);
             }
         }
-        for (MessageObject message : newest.values()) {
+        for (MessageObject seen : newest.values()) {
+            MessageObject message = readBoundary(seen);
             TLRPC.Dialog dialog = getMessagesController().getDialog(message.getDialogId());
             if (dialog == null || message.getId() <= dialog.read_inbox_max_id) {
                 continue;
@@ -979,6 +1120,23 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             getMessagesController().markDialogAsRead(message.getDialogId(), message.getId(), message.getId(), message.messageOwner.date, false, 0, countDiff, true, 0);
         }
         updatePagedownButton();
+    }
+
+    /** The post up to which the channel is read when {@code seen} is: the hidden posts right after it go with it. */
+    private MessageObject readBoundary(MessageObject seen) {
+        int nextShown = Integer.MAX_VALUE;
+        for (MessageObject post : posts.values()) {
+            if (post.getDialogId() == seen.getDialogId() && post.getId() > seen.getId() && !hidden.contains(key(-post.getDialogId(), post.getId()))) {
+                nextShown = Math.min(nextShown, post.getId());
+            }
+        }
+        MessageObject boundary = seen;
+        for (MessageObject post : posts.values()) {
+            if (post.getDialogId() == seen.getDialogId() && post.getId() > boundary.getId() && post.getId() < nextShown && hidden.contains(key(-post.getDialogId(), post.getId()))) {
+                boundary = post;
+            }
+        }
+        return boundary;
     }
 
     private void openChannel(TLRPC.Chat chat, int postId) {
@@ -1296,6 +1454,9 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         public int getItemViewType(int position) {
             MessageObject message = messageAt(position);
             if (message != null) {
+                if (message.contentType == 0 && minimized.contains(key(-message.getDialogId(), message.getId()))) {
+                    return 3;
+                }
                 return message.contentType;
             }
             return 4;
@@ -1356,6 +1517,8 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                 view = new ChatActionCell(context);
             } else if (viewType == 2) {
                 view = new ChatUnreadCell(context, null);
+            } else if (viewType == 3) {
+                view = new MinimizedPostCell(context);
             } else {
                 view = new ChatLoadingCell(context, contentView, null);
             }
@@ -1427,6 +1590,9 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                 cell.setAlpha(1f);
             } else if (view instanceof ChatUnreadCell) {
                 ((ChatUnreadCell) view).setText(LocaleController.getString(R.string.TgfeedUnreadPosts));
+            } else if (view instanceof MinimizedPostCell) {
+                TLRPC.Chat chat = getMessagesController().getChat(-message.getDialogId());
+                ((MinimizedPostCell) view).set(message, chat != null ? chat.title : "", summaries.get(key(-message.getDialogId(), message.getId())));
             }
         }
     }

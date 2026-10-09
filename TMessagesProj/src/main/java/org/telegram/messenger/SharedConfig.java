@@ -148,6 +148,15 @@ public class SharedConfig {
                 .apply();
     }
 
+    // TGFEED: the "Hide stories" switch, device-wide.
+    public static void toggleTgfeedHideStories() {
+        tgfeedHideStories = !tgfeedHideStories;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("tgfeedHideStories", tgfeedHideStories)
+                .apply();
+    }
+
     public static void toggleSurfaceInStories() {
         useSurfaceInStories = !useSurfaceInStories;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
@@ -262,6 +271,7 @@ public class SharedConfig {
     public static boolean forceDisableTabletMode;
     public static boolean updateStickersOrderOnSend = true;
     public static boolean bigCameraForRound;
+    public static boolean tgfeedHideStories; // TGFEED
     public static Boolean useCamera2Force;
     public static boolean useNewBlur;
     public static boolean useSurfaceInStories;
@@ -670,6 +680,7 @@ public class SharedConfig {
             updateStickersOrderOnSend = preferences.getBoolean("updateStickersOrderOnSend", true);
             dayNightWallpaperSwitchHint = preferences.getInt("dayNightWallpaperSwitchHint", 0);
             bigCameraForRound = preferences.getBoolean("bigCameraForRound", false);
+            tgfeedHideStories = preferences.getBoolean("tgfeedHideStories", false); // TGFEED
             useNewBlur = preferences.getBoolean("useNewBlur", true);
             useCamera2Force = !preferences.contains("useCamera2Force_2") ? null : preferences.getBoolean("useCamera2Force_2", false);
             useSurfaceInStories = preferences.getBoolean("useSurfaceInStories", Build.VERSION.SDK_INT >= 30);

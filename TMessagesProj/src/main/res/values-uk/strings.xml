@@ -2,6 +2,8 @@
 <resources>
     <string name="AppName">Unofficial Telegram Feed</string>
     <string name="AppLauncherLabel">TG Feed</string>
+    <string name="TgfeedSettings">Unofficial Telegram Feed</string>
+    <string name="TgfeedHideStories">Приховати історії</string>
     <string name="AppNameBeta">Telegram Beta</string>
     <string name="LanguageName">Українська</string>
     <string name="English">Англійська</string>

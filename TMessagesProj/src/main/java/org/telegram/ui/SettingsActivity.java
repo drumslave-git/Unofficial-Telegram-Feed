@@ -685,6 +685,11 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             items.add(UItem.asShadow(null));
         }
 
+        // TGFEED: the fork's own settings section before Chat Settings
+        items.add(UItem.asHeader(getString(R.string.TgfeedSettings)));
+        items.add(UItem.asCheck(100, getString(R.string.TgfeedHideStories)).setChecked(SharedConfig.tgfeedHideStories));
+        items.add(UItem.asShadow(null));
+
         items.add(SettingCell.Factory.of(1, IconBackgroundColors.BLUE.top, IconBackgroundColors.BLUE.bottom, R.drawable.settings_account, getString(R.string.SettingsAccount), getString(R.string.SettingsAccountInfo)));
         items.add(SettingCell.Factory.of(2, IconBackgroundColors.ORANGE.top, IconBackgroundColors.ORANGE.bottom, R.drawable.settings_chat, getString(R.string.SettingsChat), getString(R.string.SettingsChatInfo)));
         items.add(SettingCell.Factory.of(3, IconBackgroundColors.GREEN.top, IconBackgroundColors.GREEN.bottom, R.drawable.settings_privacy, getString(R.string.SettingsPrivacySecurity), getString(R.string.SettingsPrivacySecurityInfo)));
@@ -812,6 +817,10 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             return;
         }
         switch (item.id) {
+            case 100: // TGFEED
+                SharedConfig.toggleTgfeedHideStories();
+                listView.adapter.update(true);
+                break;
             case 1:
                 presentSettingFragment(new UserInfoActivity());
                 break;

@@ -63,11 +63,15 @@ The root `build.gradle` holds the directory lookup (`tgfeedSecretsDir`) and the 
 - Every edit to a Telegram file is marked on its changed lines with a `TGFEED` comment (`// TGFEED` in Java and gradle, `<!-- TGFEED -->` in XML), so that `git grep TGFEED` lists every point where the fork touches Telegram and an upstream merge conflict is read in context.
 - The fork's UI strings are in `TMessagesProj/src/main/res/values/strings.xml` (English) and `values-uk/strings.xml` (Ukrainian), among Telegram's strings. Telegram's build plugin (`buildSrc`, `TelegramStringsTask`) packs every string of both files, so the fork's strings need nothing else. Telegram's cloud language packs override only the keys they know; the fork's keys keep their local values in every language.
 
-## 6. Storage
+## 6. Settings
+
+The fork's settings section, "Unofficial Telegram Feed", is the first block of `SettingsActivity` (the Settings tab), before Account and Chat Settings, built with `UItem` rows and ids from 100 up. Device-wide settings are fields of `SharedConfig` stored in the `mainconfig` preferences with the prefix `tgfeed`: `tgfeedHideStories` (the "Hide stories" switch, off at first).
+
+## 7. Storage
 
 Feeds and rules are stored per account in the fork's own SQLite file, `tgfeed<account>.db` in the app's files directory, next to Telegram's `cache4.db`. Telegram's database is not changed, so an upstream change to its schema never touches the fork's data. Each account's controllers (`FeedsController`, `RulesController`) own that account's file and are created like the other per-account controllers of `AccountInstance`.
 
-## 7. Upstream merges
+## 8. Upstream merges
 
 The remote `upstream` is https://github.com/DrKLO/Telegram.git. On every Telegram release:
 
@@ -76,7 +80,7 @@ The remote `upstream` is https://github.com/DrKLO/Telegram.git. On every Telegra
 3. Update the version lines in `PLAN.md` and this file, rebuild with `tool/ci.sh`, and do a hands-on pass on the emulator: login, chat list, the Feeds tab, a feed, a rule notification, read aloud, the stories switch.
 4. Commit the merge as `chore: merge Telegram <version>`.
 
-## 8. Tests and CI
+## 9. Tests and CI
 
 `tool/ci.sh` runs the unit tests of `TMessagesProj_FeedTests` (`:TMessagesProj_FeedTests:test`) and builds the debug APK, and exits with the first failing step's code; it needs `JAVA_HOME` and `ANDROID_HOME` as in section 2. `TMessagesProj_AppTests` holds Telegram's instrumented tests and is not run.
 
@@ -84,7 +88,7 @@ The gradle property `TGFEED_ABIS` (comma-separated ABI names) limits the ABIs th
 
 `.github/workflows/ci.yml` runs `tool/ci.sh` on every push and pull request on an Ubuntu runner with Temurin 17, the pinned NDK and CMake, for `arm64-v8a` only, and keeps the debug APK as the artifact `debug-apk`. It writes `secrets/` from the repository secrets `TG_API_ID`, `TG_API_HASH` and `GOOGLE_SERVICES_JSON_BASE64` (`base64 -w0 google-services.json`) and fails when one is missing.
 
-## 9. Releases
+## 10. Releases
 
 A tag `v<version>` pushed to GitHub runs `.github/workflows/release.yml` (it can also be started by hand with an existing tag). It builds `:TMessagesProj_App:assembleAfatRelease` with all four ABIs, signed with the keystore from the secret `ANDROID_KEYSTORE_BASE64` (`base64 -w0 release.keystore`, written over the dummy `TMessagesProj/config/release.keystore` in the runner's checkout) and the gradle properties `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS` and `RELEASE_KEY_PASSWORD` from the secrets `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`, and publishes `unofficial-telegram-feed-<tag>.apk` on the tag's GitHub release. It needs the same three secrets as `ci.yml` and fails when any secret is missing.
 

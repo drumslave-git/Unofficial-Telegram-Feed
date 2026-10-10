@@ -4,13 +4,12 @@ Open work only. A task leaves this file in the commit that finishes it; `git log
 
 Legend: `[ ]` not started, `[~]` in progress (name the branch).
 
-**Current phase:** P4 — Read aloud. **Next task:** P4-2.
+**Current phase:** P4 — Read aloud. **Next task:** P4-3.
 
 The fork of the official Telegram Android client (DrKLO/Telegram, 12.10.6) that takes over three features of the Flutter app `telegram-feed`: feeds that group channels into one timeline, keyword rules per channel that decide which posts notify and are read aloud, and a switch that hides stories. Everything else stays as the official app has it. Each phase from P1 on ends with a tagged release.
 
 ## P4 — Read aloud
 
-- [ ] P4-2 Stopping. A banner under the action bar of every screen while a post is read, naming the channel and the waiting count, with "Stop" and "Stop and clear queue"; volume down and a headset's pause stop the current post and clear the queue without changing the volume; with nothing read the keys work as usual.
 - [ ] P4-3 Notification actions. Every rule notification carries "Listen" (reads the posts it lists that were not read yet, all of them when every one was) or "Stop" while one of its posts is read or waits; swiping the notification away and "Clear all" stop its posts.
 - [ ] P4-4 Settings. "Read aloud" screen in the fork's settings section: speed, pitch, maximum length, language when detection fails, a preview, voices listed by language with a play button each, "Add language" from a searchable list, the phone's default voice for every other language.
 - [ ] P4-5 Hands-on pass with the screen on, off and locked; the phase's release.

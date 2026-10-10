@@ -5,6 +5,9 @@ import android.content.res.Configuration;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
+import android.media.VolumeProvider;
+import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
@@ -58,6 +61,7 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
     }
 
     private static final long CALL_RETRY_MS = 3000;
+    private static final long STOP_SETTLE_MS = 400;
     private static final String UNDETERMINED = "und";
 
     private static volatile ReadAloudController instance;
@@ -85,6 +89,7 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
     private AudioFocusRequest focusRequest;
     private PowerManager.WakeLock wakeLock;
     private int utteranceSerial;
+    private MediaSession keys;
 
     private final AudioManager.OnAudioFocusChangeListener focusListener = change -> AndroidUtilities.runOnUIThread(() -> onFocusChange(change));
     private final Runnable retry = this::next;
@@ -136,7 +141,8 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
     public void skipCurrent() {
         AndroidUtilities.runOnUIThread(() -> {
             finishCurrent();
-            next();
+            // The engine stops asynchronously; a post spoken at once would be cut by that stop.
+            AndroidUtilities.runOnUIThread(retry, STOP_SETTLE_MS);
         });
     }
 
@@ -149,6 +155,7 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
 
     private void start() {
         ReadAloudService.start();
+        holdKeys();
         if (wakeLock == null) {
             PowerManager power = (PowerManager) ApplicationLoader.applicationContext.getSystemService(Context.POWER_SERVICE);
             wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "tgfeed:readaloud");
@@ -290,6 +297,12 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
         }
 
         @Override
+        public void onError(String utteranceId, int errorCode) {
+            log("speech error " + errorCode + " for " + utteranceId);
+            onDone(utteranceId);
+        }
+
+        @Override
         public void onStop(String utteranceId, boolean interrupted) {
             AndroidUtilities.runOnUIThread(() -> {
                 if (("tgfeed_" + utteranceSerial).equals(utteranceId)) {
@@ -342,6 +355,70 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
         }
     }
 
+    /**
+     * Takes the volume keys and a headset's buttons while posts are read or wait: Android gives
+     * them to the media session that plays, and this one plays "remotely" through a volume
+     * provider of its own, so volume down stops the speech instead of lowering the volume, also
+     * with the screen off; volume up raises the media volume as usual. A headset's pause or stop
+     * stops the speech too. Released when the queue is done, so the keys work as usual again.
+     */
+    private void holdKeys() {
+        if (keys != null) {
+            return;
+        }
+        try {
+            AudioManager audio = audioManager();
+            int stream = AudioManager.STREAM_MUSIC;
+            VolumeProvider volume = new VolumeProvider(VolumeProvider.VOLUME_CONTROL_ABSOLUTE, audio.getStreamMaxVolume(stream), audio.getStreamVolume(stream)) {
+                @Override
+                public void onAdjustVolume(int direction) {
+                    if (direction < 0) {
+                        log("volume down stops the speech");
+                        stopAll();
+                    } else if (direction > 0) {
+                        audio.adjustStreamVolume(stream, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI);
+                        setCurrentVolume(audio.getStreamVolume(stream));
+                    }
+                }
+
+                @Override
+                public void onSetVolumeTo(int value) {
+                    audio.setStreamVolume(stream, value, 0);
+                    setCurrentVolume(audio.getStreamVolume(stream));
+                }
+            };
+            keys = new MediaSession(ApplicationLoader.applicationContext, "tgfeed-read-aloud");
+            keys.setPlaybackToRemote(volume);
+            keys.setCallback(new MediaSession.Callback() {
+                @Override
+                public void onPause() {
+                    log("headset pause stops the speech");
+                    stopAll();
+                }
+
+                @Override
+                public void onStop() {
+                    stopAll();
+                }
+            });
+            keys.setPlaybackState(new PlaybackState.Builder()
+                    .setActions(PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE | PlaybackState.ACTION_STOP)
+                    .setState(PlaybackState.STATE_PLAYING, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1f)
+                    .build());
+            keys.setActive(true);
+        } catch (Throwable e) {
+            FileLog.e(e);
+            keys = null;
+        }
+    }
+
+    private void releaseKeys() {
+        if (keys != null) {
+            keys.release();
+            keys = null;
+        }
+    }
+
     private static AudioManager audioManager() {
         return (AudioManager) ApplicationLoader.applicationContext.getSystemService(Context.AUDIO_SERVICE);
     }
@@ -364,6 +441,7 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
 
     private void idle() {
         AndroidUtilities.cancelRunOnUIThread(retry);
+        releaseKeys();
         abandonFocus();
         ReadAloudService.stop();
         if (wakeLock != null && wakeLock.isHeld()) {

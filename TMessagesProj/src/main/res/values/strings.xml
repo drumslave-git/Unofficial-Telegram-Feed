@@ -195,6 +195,12 @@
     <string name="TgfeedTtsMore">… and more</string>
     <string name="TgfeedReadAloudChannel">Read aloud</string>
     <string name="TgfeedReadingAloud">Reading posts aloud</string>
+    <string name="TgfeedReadingAloudShort">Reading aloud</string>
+    <string name="TgfeedReadingAloudChannel">Reading aloud: %1$s</string>
+    <string name="TgfeedReadingQueue_one">%1$d more post waits.</string>
+    <string name="TgfeedReadingQueue_other">%1$d more posts wait.</string>
+    <string name="TgfeedStop">Stop</string>
+    <string name="TgfeedStopAll">Stop and clear queue</string>
     <string name="AppNameBeta">Telegram Beta</string>
     <string name="LanguageName">English</string>
     <string name="English">English</string>

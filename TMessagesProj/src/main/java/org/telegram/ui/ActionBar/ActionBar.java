@@ -112,7 +112,7 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
     protected boolean occupyStatusBar = true;
     protected boolean actionModeVisible;
     private boolean addToContainer = true;
-    private org.unofficial.telegramfeed.ui.PauseBanner tgfeedPauseBanner; // TGFEED: under the bar while the rules are paused
+    private View tgfeedPauseBanner; // TGFEED: the fork's banners under the bar (paused, reading aloud)
     private boolean clipContent;
     private boolean interceptTouches = true;
     private boolean forceSkipTouches;
@@ -2003,7 +2003,7 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
         super.onAttachedToWindow();
         attached = true;
         if (tgfeedPauseBanner == null && getParent() instanceof ActionBarLayout.LayoutContainer) { // TGFEED: only where the container lays the screen out below the bar
-            tgfeedPauseBanner = new org.unofficial.telegramfeed.ui.PauseBanner(getContext(), null, true); // TGFEED
+            tgfeedPauseBanner = org.unofficial.telegramfeed.ui.PauseBanner.createStack(getContext(), true); // TGFEED
             addView(tgfeedPauseBanner, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)); // TGFEED
         } // TGFEED
         updateAttachState();

@@ -205,6 +205,14 @@
     <string name="TgfeedTtsMore">… і далі</string>
     <string name="TgfeedReadAloudChannel">Читання вголос</string>
     <string name="TgfeedReadingAloud">Читання дописів уголос</string>
+    <string name="TgfeedReadingAloudShort">Читання вголос</string>
+    <string name="TgfeedReadingAloudChannel">Читання вголос: %1$s</string>
+    <string name="TgfeedReadingQueue_one">У черзі ще %1$d допис.</string>
+    <string name="TgfeedReadingQueue_few">У черзі ще %1$d дописи.</string>
+    <string name="TgfeedReadingQueue_many">У черзі ще %1$d дописів.</string>
+    <string name="TgfeedReadingQueue_other">У черзі ще %1$d допису.</string>
+    <string name="TgfeedStop">Зупинити</string>
+    <string name="TgfeedStopAll">Зупинити й очистити чергу</string>
     <string name="AppNameBeta">Telegram Beta</string>
     <string name="LanguageName">Українська</string>
     <string name="English">Англійська</string>

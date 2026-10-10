@@ -125,7 +125,19 @@ public class PauseBanner extends FrameLayout implements NotificationCenter.Notif
         banner[0] = new PauseBanner(panels.getContext(), shown -> panels.setViewVisible(banner[0], shown), tinted);
         panels.addView(banner[0], 0);
         panels.setViewVisible(banner[0], SharedConfig.tgfeedRulesPaused, false);
+        ReadingBanner[] reading = new ReadingBanner[1];
+        reading[0] = new ReadingBanner(panels.getContext(), shown -> panels.setViewVisible(reading[0], shown), tinted);
+        panels.addView(reading[0], 1);
         return banner[0];
+    }
+
+    /** The fork's banners one under the other, each shown only while it has something to say. */
+    public static View createStack(Context context, boolean tinted) {
+        LinearLayout stack = new LinearLayout(context);
+        stack.setOrientation(LinearLayout.VERTICAL);
+        stack.addView(new PauseBanner(context, null, tinted), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+        stack.addView(new ReadingBanner(context, null, tinted), LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+        return stack;
     }
 
     /**

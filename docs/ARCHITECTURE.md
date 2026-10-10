@@ -191,6 +191,9 @@ When a match asks for read-aloud, `RuleNotifications.decide` hands the post's te
 - Speech uses the media stream (`USAGE_MEDIA`, `CONTENT_TYPE_SPEECH`) with a transient audio focus that lets other audio duck. Losing the focus, to a call or to another app, stops the post; it is read again from the start once the focus returns. While the audio mode is a call or ringing, the queue waits and checks again every 3 seconds.
 - While the queue has work, `ReadAloudService`, a foreground service of type `mediaPlayback` with a silent notification on the channel `tgfeed_read_aloud`, and a partial wake lock keep the process speaking with the screen off and after a push. Android lets a push start it; when Android refuses, speech still runs while the process lives.
 - Pausing the rules stops the post being read and empties the queue. `NotificationCenter.tgfeedReadAloudChanged` (global) is posted whenever the post being read or the queue changes.
+- `ui.ReadingBanner` shows while a post is read: the channel, how many posts wait, "Stop" (the next post follows) and, while posts wait, "Stop and clear queue". It sits with the pause banner wherever that one shows (`PauseBanner.createStack` under an action bar and in the Settings section, `PauseBanner.addTo` in the stacks of top panels).
+- While the queue has work the controller holds a `MediaSession` that plays "remotely" through a `VolumeProvider` of its own. Android gives the volume keys and a headset's buttons to that session, also with the screen off, so volume down and a headset's pause or stop end the speech and empty the queue without changing the volume, and volume up raises the media volume. The session is released when the queue is done, so the keys work as usual again.
+- After "Stop" the next post starts 400 ms later, since the engine stops asynchronously and would cut a post spoken at once.
 
 ## 9. Upstream merges
 

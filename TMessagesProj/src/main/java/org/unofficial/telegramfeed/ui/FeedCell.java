@@ -56,8 +56,8 @@ public class FeedCell extends FrameLayout {
 
         counterView = new CounterView(context, resourcesProvider);
         counterView.setColors(Theme.key_chats_unreadCounterText, Theme.key_chats_unreadCounter);
-        counterView.setGravity(Gravity.END);
-        addView(counterView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 28, Gravity.END | Gravity.CENTER_VERTICAL, 0, 0, 52, 0));
+        counterView.setGravity(LocaleController.isRTL ? Gravity.LEFT : Gravity.RIGHT); // CounterView knows only LEFT and RIGHT, and fills the row's width
+        addView(counterView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 28, Gravity.CENTER_VERTICAL, LocaleController.isRTL ? 52 : 0, 0, LocaleController.isRTL ? 0 : 52, 0));
 
         reorderView = new ImageView(context);
         reorderView.setImageResource(R.drawable.list_reorder);

@@ -227,7 +227,12 @@ public class FeedsTabView extends FrameLayout {
     private void confirmDelete(Feed feed) {
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext(), resourcesProvider);
         builder.setTitle(LocaleController.getString(R.string.TgfeedDeleteFeed));
-        builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString(R.string.TgfeedDeleteFeedText, feed.name)));
+        CharSequence text = LocaleController.formatString(R.string.TgfeedDeleteFeedText, feed.name);
+        int rules = org.unofficial.telegramfeed.feeds.RulesController.getInstance(currentAccount).getRulesOfFeed(feed.id).size();
+        if (rules > 0) {
+            text = text + " " + LocaleController.formatPluralString("TgfeedDeleteFeedRules", rules);
+        }
+        builder.setMessage(AndroidUtilities.replaceTags(text.toString()));
         builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         builder.setPositiveButton(LocaleController.getString(R.string.Delete), (dialog, which) -> controller().deleteFeed(feed.id));
         AlertDialog dialog = builder.create();

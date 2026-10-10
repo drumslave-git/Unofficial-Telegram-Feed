@@ -76,6 +76,8 @@
     <string name="TgfeedRename">Rename</string>
     <string name="TgfeedDeleteFeed">Delete feed</string>
     <string name="TgfeedDeleteFeedText">Delete the feed **%1$s**? Its channels stay in Telegram.</string>
+    <string name="TgfeedDeleteFeedRules_one">**%1$d rule** scoped by it is deleted with it.</string>
+    <string name="TgfeedDeleteFeedRules_other">**%1$d rules** scoped by it are deleted with it.</string>
     <string name="TgfeedFeedsEmptyTitle">No feeds yet</string>
     <string name="TgfeedFeedsEmptyText">A feed shows the posts of several channels as one timeline. Create one and add channels to it.</string>
     <string name="TgfeedChannels_one">%1$d channel</string>

@@ -36,7 +36,7 @@ public class FeedsController extends BaseController {
         return localInstance;
     }
 
-    private final FeedsStorage storage;
+    final FeedsStorage storage;
     private final ArrayList<Feed> feeds = new ArrayList<>();
     private boolean loaded;
     private boolean loading;
@@ -118,11 +118,13 @@ public class FeedsController extends BaseController {
         changed();
     }
 
+    /** Deletes the feed and the rules it scopes. */
     public void deleteFeed(long feedId) {
         Feed feed = getFeed(feedId);
         if (feed == null) {
             return;
         }
+        RulesController.getInstance(currentAccount).deleteRulesOfFeed(feedId);
         feeds.remove(feed);
         Feed.renumber(feeds);
         storage.deleteFeed(feedId);

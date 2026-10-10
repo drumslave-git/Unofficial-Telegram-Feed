@@ -142,6 +142,18 @@ public final class FeedFilter {
         return true;
     }
 
+    /**
+     * Whether a single message may show in the feed, as rules judge a post before its album is
+     * complete: an album part counts as shown when the feed shows whole albums and is not
+     * text-only, since the caption of an album sits on one part that a filter by kind may drop.
+     */
+    public boolean mayShow(Post post, boolean wholePost) {
+        if (post.serviceNote) {
+            return isEmpty();
+        }
+        return wordsMayPass(post) && (content(post) || (wholePost && post.albumId != 0 && mode != MODE_TEXT_ONLY));
+    }
+
     /** Whether the post passes by itself, as the shared media tabs list single items by kind. */
     public boolean allows(Post post) {
         return content(post) && wordsMayPass(post);

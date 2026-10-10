@@ -78,6 +78,10 @@
     <string name="TgfeedRename">Перейменувати</string>
     <string name="TgfeedDeleteFeed">Видалити стрічку</string>
     <string name="TgfeedDeleteFeedText">Видалити стрічку **%1$s**? Її канали залишаться в Telegram.</string>
+    <string name="TgfeedDeleteFeedRules_one">**%1$d правило**, обмежене нею, буде видалено разом із нею.</string>
+    <string name="TgfeedDeleteFeedRules_few">**%1$d правила**, обмежені нею, буде видалено разом із нею.</string>
+    <string name="TgfeedDeleteFeedRules_many">**%1$d правил**, обмежених нею, буде видалено разом із нею.</string>
+    <string name="TgfeedDeleteFeedRules_other">**%1$d правила**, обмежені нею, буде видалено разом із нею.</string>
     <string name="TgfeedFeedsEmptyTitle">Ще немає стрічок</string>
     <string name="TgfeedFeedsEmptyText">Стрічка показує дописи кількох каналів однією хронологією. Створіть її та додайте канали.</string>
     <string name="TgfeedChannels_one">%1$d канал</string>

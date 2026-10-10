@@ -401,4 +401,25 @@ public final class TgfeedAlerts {
         });
         fragment.showDialog(b.create());
     }
+
+    /** Whether Android may hold the app back while the phone sleeps. */
+    public static boolean batteryOptimized(android.app.Activity activity) {
+        if (android.os.Build.VERSION.SDK_INT < 23 || activity == null) {
+            return false;
+        }
+        android.os.PowerManager power = (android.os.PowerManager) activity.getSystemService(Context.POWER_SERVICE);
+        return power != null && !power.isIgnoringBatteryOptimizations(activity.getPackageName());
+    }
+
+    /** Asks Android to let the app off battery optimisation. */
+    public static void requestBatteryExemption(android.app.Activity activity) {
+        if (activity == null) {
+            return;
+        }
+        try {
+            activity.startActivity(new android.content.Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, android.net.Uri.parse("package:" + activity.getPackageName())));
+        } catch (Exception e) {
+            org.telegram.messenger.FileLog.e(e);
+        }
+    }
 }

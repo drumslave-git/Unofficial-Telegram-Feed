@@ -89,6 +89,7 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
     private AudioFocusRequest focusRequest;
     private PowerManager.WakeLock wakeLock;
     private int utteranceSerial;
+    private int focusRefusals;
     private MediaSession keys;
 
     private final AudioManager.OnAudioFocusChangeListener focusListener = change -> AndroidUtilities.runOnUIThread(() -> onFocusChange(change));
@@ -318,10 +319,17 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
 
     private void speak(Item item) {
         if (!requestFocus()) {
-            log("audio focus refused, waiting");
-            AndroidUtilities.runOnUIThread(retry, CALL_RETRY_MS);
-            return;
+            // Android refuses the focus to an app in the background without a foreground service,
+            // which it lets start only after a push, a tap on a notification or with the battery
+            // optimisation off. Outside a call the post is then spoken without the focus.
+            if (focusRefusals++ < 1) {
+                log("audio focus refused, trying again");
+                AndroidUtilities.runOnUIThread(retry, CALL_RETRY_MS);
+                return;
+            }
+            log("audio focus refused, speaking without it");
         }
+        focusRefusals = 0;
         String language = item.language == null || UNDETERMINED.equals(item.language) ? fallbackLanguage() : item.language;
         int available = applyVoice(tts, language);
         tts.setSpeechRate(ReadAloudSettings.getRate());

@@ -720,6 +720,11 @@ public class RuleEditActivity extends BaseFragment {
         Runnable afterPermission = () -> {
             if (draft.enabled && getMessagesController().isDialogMuted(-draft.channelId, 0)) {
                 offerUnmute();
+            } else if (draft.enabled && draft.readAloud && TgfeedAlerts.batteryOptimized(getParentActivity())) {
+                // Android lets a background app speak only with a foreground service, which it lets
+                // start after a push, a tap on a notification or with the battery optimisation off.
+                TgfeedAlerts.requestBatteryExemption(getParentActivity());
+                finishFragment();
             } else {
                 finishFragment();
             }

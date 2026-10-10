@@ -4,11 +4,6 @@ import static org.telegram.messenger.AndroidUtilities.dp;
 
 import android.content.Context;
 import android.content.DialogInterface;
-import android.content.Intent;
-import android.net.Uri;
-import android.os.Build;
-import android.os.PowerManager;
-import android.provider.Settings;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -22,7 +17,6 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -168,7 +162,7 @@ public class RulesActivity extends BaseFragment implements NotificationCenter.No
             }
             Row row = rows.get(position);
             if (row.type == ROW_BATTERY) {
-                requestBatteryExemption();
+                TgfeedAlerts.requestBatteryExemption(getParentActivity());
             } else if (row.type == ROW_NEW) {
                 presentFragment(new RuleEditActivity(0, channelId, feedId));
             } else if (row.type == ROW_RULE) {
@@ -224,24 +218,6 @@ public class RulesActivity extends BaseFragment implements NotificationCenter.No
         return controller().getRules();
     }
 
-    /** Whether Android may hold the app back while the phone sleeps. */
-    private boolean batteryOptimized() {
-        if (Build.VERSION.SDK_INT < 23 || getParentActivity() == null) {
-            return false;
-        }
-        PowerManager power = (PowerManager) getParentActivity().getSystemService(Context.POWER_SERVICE);
-        return power != null && !power.isIgnoringBatteryOptimizations(getParentActivity().getPackageName());
-    }
-
-    private void requestBatteryExemption() {
-        try {
-            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getParentActivity().getPackageName()));
-            getParentActivity().startActivity(intent);
-        } catch (Exception e) {
-            FileLog.e(e);
-        }
-    }
-
     @Override
     public void onResume() {
         super.onResume();
@@ -250,7 +226,7 @@ public class RulesActivity extends BaseFragment implements NotificationCenter.No
 
     private void updateRows() {
         rows.clear();
-        if (!shownRules().isEmpty() && batteryOptimized()) {
+        if (!shownRules().isEmpty() && TgfeedAlerts.batteryOptimized(getParentActivity())) {
             rows.add(new Row(ROW_BATTERY, 0, null, false));
             rows.add(new Row(ROW_SHADOW, 0, null, false));
         }

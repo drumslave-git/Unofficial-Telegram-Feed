@@ -25,6 +25,7 @@ public class NotificationDismissReceiver extends BroadcastReceiver {
         }
         long dialogId = intent.getLongExtra("dialogId", 0);
         int date = intent.getIntExtra("messageDate", 0);
+        org.unofficial.telegramfeed.feeds.ReadAloudController.getInstance().stopDialog(currentAccount, dialogId); // TGFEED: a dismissed notification stops its posts; 0, the summary, stops the account's
         if (intent.hasExtra("story") && intent.getBooleanExtra("story", false)) {
             NotificationsController.getInstance(currentAccount).processIgnoreStories();
         } else if (intent.hasExtra("storyReaction") && intent.getBooleanExtra("storyReaction", false)) {

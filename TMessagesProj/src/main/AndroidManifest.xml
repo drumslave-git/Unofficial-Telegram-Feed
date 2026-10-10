@@ -472,6 +472,7 @@
             android:permission="android.permission.BIND_JOB_SERVICE"
             android:foregroundServiceType="dataSync"
         />
+        <receiver android:name="org.unofficial.telegramfeed.feeds.ReadAloudReceiver" android:exported="false" /> <!-- TGFEED: Listen and Stop on rule notifications -->
         <service android:name="org.unofficial.telegramfeed.feeds.ReadAloudService" android:exported="false" android:foregroundServiceType="mediaPlayback" /> <!-- TGFEED: keeps speech going with the screen off -->
         <service
             android:name=".BringAppForegroundService"

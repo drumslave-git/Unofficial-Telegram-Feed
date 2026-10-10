@@ -1402,6 +1402,37 @@ public class NotificationsController extends BaseController implements Notificat
     }
 
     // TGFEED: whether a message of the dialog waiting in the tray notified through a rule
+    // TGFEED: "Listen" on a rule notification, or "Stop" while one of its channel's posts is read or waits
+    private void tgfeedAddReadAloudAction(NotificationCompat.Builder builder, long dialogId, String title, ArrayList<MessageObject> messages, int requestCode) {
+        org.unofficial.telegramfeed.feeds.RuleNotifications rules = org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount);
+        ArrayList<Integer> ids = new ArrayList<>();
+        ArrayList<String> texts = new ArrayList<>();
+        for (int i = messages.size() - 1; i >= 0; i--) { // oldest first
+            MessageObject message = messages.get(i);
+            if (rules.get(dialogId, message.getId()) != null && message.messageOwner != null && !TextUtils.isEmpty(message.messageOwner.message)) {
+                ids.add(message.getId());
+                texts.add(message.messageOwner.message);
+            }
+        }
+        if (ids.isEmpty()) {
+            return;
+        }
+        boolean reading = org.unofficial.telegramfeed.feeds.ReadAloudController.getInstance().isReadingNow(currentAccount, dialogId);
+        Intent intent = new Intent(ApplicationLoader.applicationContext, org.unofficial.telegramfeed.feeds.ReadAloudReceiver.class);
+        intent.setAction(reading ? org.unofficial.telegramfeed.feeds.ReadAloudReceiver.ACTION_STOP : org.unofficial.telegramfeed.feeds.ReadAloudReceiver.ACTION_LISTEN);
+        intent.putExtra("account", currentAccount);
+        intent.putExtra("dialogId", dialogId);
+        if (!reading) {
+            int[] idArray = new int[ids.size()];
+            for (int i = 0; i < idArray.length; i++) idArray[i] = ids.get(i);
+            intent.putExtra("messageIds", idArray);
+            intent.putExtra("texts", texts.toArray(new String[0]));
+            intent.putExtra("title", title);
+        }
+        PendingIntent pending = PendingIntent.getBroadcast(ApplicationLoader.applicationContext, requestCode, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+        builder.addAction(reading ? R.drawable.msg_voice_muted : R.drawable.msg_voice_unmuted, LocaleController.getString(reading ? R.string.TgfeedStop : R.string.TgfeedListen), pending);
+    }
+
     private boolean tgfeedRuleNotified(long dialogId) {
         return tgfeedRuleNotifiedCount(dialogId) > 0;
     }
@@ -5734,6 +5765,7 @@ public class NotificationsController extends BaseController implements Notificat
                         break;
                     }
                 }
+                tgfeedAddReadAloudAction(builder, dialogId, name, messageObjects, internalId); // TGFEED
             }
             if (DialogObject.isEncryptedDialog(dialogId)) {
                 builder.setLocalOnly(true);

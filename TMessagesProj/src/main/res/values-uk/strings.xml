@@ -213,6 +213,7 @@
     <string name="TgfeedReadingQueue_other">У черзі ще %1$d допису.</string>
     <string name="TgfeedStop">Зупинити</string>
     <string name="TgfeedStopAll">Зупинити й очистити чергу</string>
+    <string name="TgfeedListen">Слухати</string>
     <string name="AppNameBeta">Telegram Beta</string>
     <string name="LanguageName">Українська</string>
     <string name="English">Англійська</string>

@@ -111,20 +111,93 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
     /** Adds a post to the queue; a post already queued or read is not added again. Any thread. */
     public void enqueue(int account, long dialogId, int messageId, String channelTitle, String text) {
         AndroidUtilities.runOnUIThread(() -> {
-            if (SharedConfig.tgfeedRulesPaused || TextUtils.isEmpty(text)) {
+            if (SharedConfig.tgfeedRulesPaused) {
                 return;
             }
-            String key = account + "_" + dialogId + "_" + messageId;
-            if (!taken.add(key)) {
-                return;
+            add(account, dialogId, messageId, channelTitle, text, false);
+        });
+    }
+
+    private boolean add(int account, long dialogId, int messageId, String channelTitle, String text, boolean again) {
+        if (TextUtils.isEmpty(text)) {
+            return false;
+        }
+        String key = key(account, dialogId, messageId);
+        restoreTaken();
+        if (!taken.add(key) && !again) {
+            return false;
+        }
+        while (taken.size() > 500) {
+            taken.remove(taken.iterator().next());
+        }
+        saveTaken();
+        queue.add(new Item(account, dialogId, messageId, channelTitle, text));
+        log("queued " + key + ", waiting " + queue.size());
+        changed();
+        start();
+        return true;
+    }
+
+    private boolean takenRestored;
+
+    /** The posts queued or read survive the process, so "Listen" after a push knows what was read. */
+    private void restoreTaken() {
+        if (takenRestored) {
+            return;
+        }
+        takenRestored = true;
+        String saved = ApplicationLoader.applicationContext.getSharedPreferences("tgfeed_read_aloud", Context.MODE_PRIVATE).getString("taken", "");
+        if (!saved.isEmpty()) {
+            LinkedHashSet<String> merged = new LinkedHashSet<>(java.util.Arrays.asList(saved.split(",")));
+            merged.addAll(taken);
+            taken.clear();
+            taken.addAll(merged);
+        }
+    }
+
+    private void saveTaken() {
+        ApplicationLoader.applicationContext.getSharedPreferences("tgfeed_read_aloud", Context.MODE_PRIVATE).edit().putString("taken", TextUtils.join(",", taken)).apply();
+    }
+
+    private static String key(int account, long dialogId, int messageId) {
+        return account + "_" + dialogId + "_" + messageId;
+    }
+
+    /**
+     * "Listen" on a notification: queues the posts it lists that were not read aloud yet, or all
+     * of them again when every one was. Any thread.
+     */
+    public void listen(int account, long dialogId, String channelTitle, int[] messageIds, String[] texts) {
+        AndroidUtilities.runOnUIThread(() -> {
+            restoreTaken();
+            boolean anyNew = false;
+            for (int messageId : messageIds) {
+                if (!taken.contains(key(account, dialogId, messageId))) {
+                    anyNew = true;
+                    break;
+                }
             }
-            while (taken.size() > 500) {
-                taken.remove(taken.iterator().next());
+            for (int i = 0; i < messageIds.length && i < texts.length; i++) {
+                if (!anyNew || !taken.contains(key(account, dialogId, messageIds[i]))) {
+                    add(account, dialogId, messageIds[i], channelTitle, texts[i], true);
+                }
             }
-            queue.add(new Item(account, dialogId, messageId, channelTitle, text));
-            log("queued " + key + ", waiting " + queue.size());
-            changed();
-            start();
+        });
+    }
+
+    /** Stops and drops the posts of one channel, or of every channel of the account for 0. Any thread. */
+    public void stopDialog(int account, long dialogId) {
+        AndroidUtilities.runOnUIThread(() -> {
+            boolean removed = queue.removeIf(item -> item.account == account && (dialogId == 0 || item.dialogId == dialogId));
+            if (current != null && current.account == account && (dialogId == 0 || current.dialogId == dialogId)) {
+                finishCurrent();
+                AndroidUtilities.runOnUIThread(retry, STOP_SETTLE_MS);
+            } else if (removed) {
+                changed();
+                if (current == null && queue.isEmpty()) {
+                    idle();
+                }
+            }
         });
     }
 
@@ -450,8 +523,41 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
         changed();
     }
 
+    private final java.util.HashSet<String> readingDialogs = new java.util.HashSet<>();
+
     private void changed() {
         NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.tgfeedReadAloudChanged);
+        // A rule notification shows "Stop" while a post of its channel is read or waits, "Listen" otherwise.
+        java.util.HashSet<String> now = new java.util.HashSet<>();
+        if (current != null) {
+            now.add(current.account + "_" + current.dialogId);
+        }
+        for (Item item : queue) {
+            now.add(item.account + "_" + item.dialogId);
+        }
+        if (!now.equals(readingDialogs)) {
+            java.util.HashSet<Integer> accounts = new java.util.HashSet<>();
+            for (String key : now) {
+                if (!readingDialogs.contains(key)) accounts.add(Integer.parseInt(key.substring(0, key.indexOf('_'))));
+            }
+            for (String key : readingDialogs) {
+                if (!now.contains(key)) accounts.add(Integer.parseInt(key.substring(0, key.indexOf('_'))));
+            }
+            synchronized (readingDialogs) {
+                readingDialogs.clear();
+                readingDialogs.addAll(now);
+            }
+            for (int account : accounts) {
+                org.telegram.messenger.NotificationsController.getInstance(account).showNotifications();
+            }
+        }
+    }
+
+    /** Whether a post of the channel is read or waits; any thread, as of the last change. */
+    public boolean isReadingNow(int account, long dialogId) {
+        synchronized (readingDialogs) {
+            return readingDialogs.contains(account + "_" + dialogId);
+        }
     }
 
     /** "en" or "uk": the interface language when the fork has its words, English otherwise. */

@@ -82,7 +82,7 @@ The primary user follows 20 to 200 Telegram channels (news, niche communities, a
 
 - When a rule with read-aloud fires, the app speaks "New post in <channel>" followed by the post text, also with the screen off. The words the app adds are in the post's language when it is English or Ukrainian, otherwise in the interface language.
 - The app detects the post's language and picks a voice for it. Posts are queued, never spoken over each other and never dropped. Other audio is ducked, and a phone call pauses speech.
-- While a post is read, a banner under the action bar of every screen names its channel and how many posts wait, with "Stop" (this post; the next follows) and "Stop and clear queue".
+- While a post is read, a banner names its channel and how many posts wait, where the pause banner shows (the chat list, chats, every screen with a plain action bar, the fork's section of Settings),, with "Stop" (this post; the next follows) and "Stop and clear queue".
 - Volume down stops the post being read and clears the queue without lowering the volume, also with the screen off or locked; a headset's pause does the same. When nothing is read, the keys work as usual.
 - Every rule notification carries "Listen", which reads the posts it lists that were not read aloud yet, and all of them when every one was; while one of its posts is read or waits, the action is "Stop" instead. Swiping the notification away and "Clear all" stop its posts.
 - Settings, in the "Read aloud" screen of the fork's settings section: speed, pitch, maximum length, language when detection fails, a preview, and voices listed by language, each with a play button; "Add language" picks another from a searchable list, and every other language uses the phone's default voice.

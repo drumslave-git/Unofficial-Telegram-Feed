@@ -192,6 +192,7 @@ public class FeedsTabView extends FrameLayout {
                     feed.name = name;
                     controller().updateFeed(feed);
                 }))
+                .add(R.drawable.msg_notifications, LocaleController.getString(R.string.TgfeedRules), () -> fragment.presentFragment(RulesActivity.ofFeed(feed.id)))
                 .add(R.drawable.msg_markread, LocaleController.getString(R.string.MarkAsRead), () -> markRead(feed))
                 .addIf(true, R.drawable.msg_delete, LocaleController.getString(R.string.Delete), true, () -> confirmDelete(feed))
                 .show();

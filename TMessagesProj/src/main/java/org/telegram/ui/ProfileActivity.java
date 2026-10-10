@@ -659,6 +659,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
     private int usernameRow;
     private int notificationsDividerRow;
     private int notificationsRow;
+    private int tgfeedRulesRow; // TGFEED
     private int bizHoursRow;
     private int bizLocationRow;
     private int notificationsSimpleRow;
@@ -4514,6 +4515,8 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 presentFragment(fragment);
             } else if (position == settingsRow) {
                 editItem.performClick();
+            } else if (position == tgfeedRulesRow) { // TGFEED
+                presentFragment(org.unofficial.telegramfeed.ui.RulesActivity.ofChannel(chatId)); // TGFEED
             } else if (position == botStarsBalanceRow) {
                 presentFragment(new BotStarsActivity(BotStarsActivity.TYPE_STARS, userId));
             } else if (position == botTonBalanceRow) {
@@ -10526,6 +10529,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
         notificationsDividerRow = -1;
         reportDividerRow = -1;
         notificationsRow = -1;
+        tgfeedRulesRow = -1; // TGFEED
         bizLocationRow = -1;
         bizHoursRow = -1;
         infoSectionRow = -1;
@@ -10885,6 +10889,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                 }
                 notificationsRow = rowCount++;
             }
+            if (ChatObject.isChannelAndNotMegaGroup(currentChat) && !isTopic) { // TGFEED
+                tgfeedRulesRow = rowCount++; // TGFEED
+            } // TGFEED
             if (rowCount > 0) {
                 infoSectionRow = rowCount++;
             }
@@ -13753,6 +13760,9 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
                         }
                     } else if (position == settingsRow) {
                         textCell.setTextAndIcon(LocaleController.getString(R.string.ChannelAdminSettings), R.drawable.msg_customize, position != membersSectionRow - 1);
+                    } else if (position == tgfeedRulesRow) { // TGFEED
+                        int tgfeedRules = getAccountInstance().getRulesController().getRulesOfChannel(chatId).size(); // TGFEED
+                        textCell.setTextAndValueAndIcon(LocaleController.getString(R.string.TgfeedRules), tgfeedRules > 0 ? String.valueOf(tgfeedRules) : "", R.drawable.msg_notifications, false); // TGFEED
                     } else if (position == channelBalanceRow) {
                         final TL_stars.StarsAmount stars_balance = BotStarsController.getInstance(currentAccount).getBotStarsBalance(-chatId);
                         final long ton_balance = BotStarsController.getInstance(currentAccount).getTONBalance(-chatId);
@@ -14323,7 +14333,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             } else if (position == userInfoRow || position == channelInfoRow || position == bioRow) {
                 return VIEW_TYPE_ABOUT_LINK;
             } else if (position == settingsTimerRow || position == settingsKeyRow || position == reportRow || position == reportReactionRow || position == deleteReactionRow ||
-                    position == subscribersRow || position == subscribersRequestsRow || position == administratorsRow || position == settingsRow || position == blockedUsersRow ||
+                    position == subscribersRow || position == subscribersRequestsRow || position == administratorsRow || position == settingsRow || position == tgfeedRulesRow /* TGFEED */ || position == blockedUsersRow ||
                     position == addMemberRow || position == joinRow || position == unblockRow ||
                     position == sendMessageRow || position == notificationRow || position == privacyRow ||
                     position == languageRow || position == dataRow || position == chatRow ||
@@ -15739,6 +15749,7 @@ public class ProfileActivity extends BaseFragment implements NotificationCenter.
             put(++pointer, subscribersRequestsRow, sparseIntArray);
             put(++pointer, administratorsRow, sparseIntArray);
             put(++pointer, settingsRow, sparseIntArray);
+            put(++pointer, tgfeedRulesRow, sparseIntArray); // TGFEED
             put(++pointer, blockedUsersRow, sparseIntArray);
             put(++pointer, membersSectionRow, sparseIntArray);
             put(++pointer, channelBalanceSectionRow, sparseIntArray);

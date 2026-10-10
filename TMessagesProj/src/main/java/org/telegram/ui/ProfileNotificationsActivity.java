@@ -110,6 +110,7 @@ public class ProfileNotificationsActivity extends BaseFragment implements Notifi
     private int colorRow;
     private int ledInfoRow;
     private int customResetRow;
+    private int tgfeedRulesRow = -1; // TGFEED
     private int customResetShadowRow;
     private int rowCount;
 
@@ -221,7 +222,11 @@ public class ProfileNotificationsActivity extends BaseFragment implements Notifi
         colorRow = rowCount++;
         ledInfoRow = rowCount++;
 
+        tgfeedRulesRow = -1; // TGFEED
         if (!addingException) {
+            if (isChannel && topicId == 0) { // TGFEED
+                tgfeedRulesRow = rowCount++; // TGFEED
+            } // TGFEED
             customResetRow = rowCount++;
             customResetShadowRow = rowCount++;
         } else {
@@ -383,7 +388,9 @@ public class ProfileNotificationsActivity extends BaseFragment implements Notifi
             if (!view.isEnabled()) {
                 return;
             }
-            if (position == customResetRow) {
+            if (position == tgfeedRulesRow) { // TGFEED
+                presentFragment(org.unofficial.telegramfeed.ui.RulesActivity.ofChannel(-dialogId)); // TGFEED
+            } else if (position == customResetRow) {
                 AlertDialog dialog = new AlertDialog.Builder(context, resourcesProvider)
                         .setTitle(LocaleController.getString(R.string.ResetCustomNotificationsAlertTitle))
                         .setMessage(LocaleController.getString(R.string.ResetCustomNotificationsAlert))
@@ -603,7 +610,7 @@ public class ProfileNotificationsActivity extends BaseFragment implements Notifi
             RecyclerListView.Holder holder = (RecyclerListView.Holder) listView.getChildViewHolder(child);
             int type = holder.getItemViewType();
             int position = holder.getAdapterPosition();
-            if (position != enableRow && position != customResetRow) {
+            if (position != enableRow && position != customResetRow && position != tgfeedRulesRow /* TGFEED */) {
                 switch (type) {
                     case ListAdapter.VIEW_TYPE_HEADER: {
                         HeaderCell textCell = (HeaderCell) holder.itemView;
@@ -684,7 +691,7 @@ public class ProfileNotificationsActivity extends BaseFragment implements Notifi
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
             if (holder.getAdapterPosition() == previewRow) {
                 return notificationsEnabled;
-            } else if (holder.getAdapterPosition() == customResetRow) {
+            } else if (holder.getAdapterPosition() == customResetRow || holder.getAdapterPosition() == tgfeedRulesRow /* TGFEED */) {
                 return true;
             }
             switch (holder.getItemViewType()) {
@@ -767,7 +774,11 @@ public class ProfileNotificationsActivity extends BaseFragment implements Notifi
                     TextSettingsCell textCell = (TextSettingsCell) holder.itemView;
                     String key = NotificationsController.getSharedPrefKey(dialogId, topicId);
                     SharedPreferences preferences = MessagesController.getNotificationsSettings(currentAccount);
-                    if (position == customResetRow) {
+                    if (position == tgfeedRulesRow) { // TGFEED
+                        int tgfeedRules = getAccountInstance().getRulesController().getRulesOfChannel(-dialogId).size(); // TGFEED
+                        textCell.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteBlackText)); // TGFEED
+                        textCell.setTextAndValue(LocaleController.getString(R.string.TgfeedRules), tgfeedRules > 0 ? String.valueOf(tgfeedRules) : "", true); // TGFEED
+                    } else if (position == customResetRow) {
                         textCell.setText(LocaleController.getString(R.string.ResetCustomNotifications), false);
                         textCell.setTextColor(getThemedColor(Theme.key_text_RedBold));
                     } else {
@@ -949,7 +960,7 @@ public class ProfileNotificationsActivity extends BaseFragment implements Notifi
                 }
                 case VIEW_TYPE_TEXT_SETTINGS: {
                     TextSettingsCell textCell = (TextSettingsCell) holder.itemView;
-                    if (holder.getAdapterPosition() == customResetRow) {
+                    if (holder.getAdapterPosition() == customResetRow || holder.getAdapterPosition() == tgfeedRulesRow /* TGFEED */) {
                         textCell.setEnabled(true, null);
                     } else {
                         textCell.setEnabled(notificationsEnabled, null);
@@ -988,7 +999,7 @@ public class ProfileNotificationsActivity extends BaseFragment implements Notifi
         public int getItemViewType(int position) {
             if (position == generalRow || position == popupRow || position == ledRow || position == callsRow) {
                 return VIEW_TYPE_HEADER;
-            } else if (position == soundRow || position == vibrateRow || position == priorityRow || position == smartRow || position == ringtoneRow || position == callsVibrateRow || position == customResetRow) {
+            } else if (position == soundRow || position == vibrateRow || position == priorityRow || position == smartRow || position == ringtoneRow || position == callsVibrateRow || position == customResetRow || position == tgfeedRulesRow /* TGFEED */) {
                 return VIEW_TYPE_TEXT_SETTINGS;
             } else if (position == popupInfoRow || position == ledInfoRow || position == priorityInfoRow || position == ringtoneInfoRow) {
                 return VIEW_TYPE_INFO;

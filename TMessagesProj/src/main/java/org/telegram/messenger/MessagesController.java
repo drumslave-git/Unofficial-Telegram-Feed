@@ -16813,6 +16813,19 @@ public class MessagesController extends BaseController implements NotificationCe
                                 message.dialog_id = -channelId;
                                 message.unread = !(message.action instanceof TLRPC.TL_messageActionChannelCreate || channelFinal != null && channelFinal.left || (message.out ? outboxValue : inboxValue) >= message.id);
                             }
+                            final ArrayList<TLRPC.Message> tgfeedMissed = new ArrayList<>(res.messages); // TGFEED: the rules of a channel see the unread posts of a long gap
+                            getMessagesStorage().getStorageQueue().postRunnable(() -> { // TGFEED
+                                if (!org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).governs(-channelId)) return; // TGFEED: elsewhere Telegram does not notify a long gap
+                                ArrayList<MessageObject> tgfeedPush = new ArrayList<>(); // TGFEED
+                                for (TLRPC.Message message : tgfeedMissed) { // TGFEED
+                                    if (message instanceof TLRPC.TL_messageEmpty || !message.unread || message.out) continue; // TGFEED
+                                    tgfeedPush.add(new MessageObject(currentAccount, message, usersDict, false, false)); // TGFEED
+                                } // TGFEED
+                                if (!tgfeedPush.isEmpty()) { // TGFEED
+                                    Collections.sort(tgfeedPush, (a1, a2) -> Integer.compare(a1.getId(), a2.getId())); // TGFEED: oldest first, as they came
+                                    AndroidUtilities.runOnUIThread(() -> getNotificationsController().processNewMessages(tgfeedPush, true, false, null)); // TGFEED
+                                } // TGFEED
+                            }); // TGFEED
                             getMessagesStorage().overwriteChannel(channelId, (TLRPC.TL_updates_channelDifferenceTooLong) res, newDialogType, () -> AndroidUtilities.runOnUIThread(() -> {
                                 NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.onReceivedChannelDifference, channelId);
                             }));

@@ -4,13 +4,12 @@ Open work only. A task leaves this file in the commit that finishes it; `git log
 
 Legend: `[ ]` not started, `[~]` in progress (name the branch).
 
-**Current phase:** P3 — Rules and notifications. **Next task:** P3-7.
+**Current phase:** P3 — Rules and notifications. **Next task:** P3-8.
 
 The fork of the official Telegram Android client (DrKLO/Telegram, 12.10.6) that takes over three features of the Flutter app `telegram-feed`: feeds that group channels into one timeline, keyword rules per channel that decide which posts notify and are read aloud, and a switch that hides stories. Everything else stays as the official app has it. Each phase from P1 on ends with a tagged release.
 
 ## P3 — Rules and notifications
 
-- [ ] P3-7 Missed posts. Posts that came while the phone was off or offline are matched when the app connects again, unless already read; rules match only posts newer than their creation.
 - [ ] P3-8 Hands-on pass; release 0.3.0.
 
 ## P4 — Read aloud

@@ -172,6 +172,10 @@ A rule (`core.Rule`) belongs to one channel and may be scoped by one feed. `core
 
 Telegram's server pushes a channel's posts through Firebase only while the channel is not muted in Telegram; the push starts the app's process, and `PushListenerController` hands the post to `processNewMessages` as above. Saving an enabled rule of a muted channel offers to unmute it (`NotificationsController.muteDialog`), and the editor notes under the channel that a muted channel's rules notify only while the app is open. The rules list asks, while it has rules, to let the app off battery optimisation (`ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, permission `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`).
 
+### Missed posts
+
+Posts that came while the app was not connected reach the rules when it connects again. Telegram's catch-up (`getDifference`, then `getChannelDifference` per channel with a gap) hands the unread posts it brings to `processNewMessages`, where the rules decide as for a live post. When a channel's gap is longer than the request's limit of 100 updates, the server answers `updates.channelDifferenceTooLong` with the channel's latest posts, which Telegram stores without notifying; for a channel whose rules decide, the unread ones among them go to `processNewMessages` as well, oldest first. Read posts and posts older than a rule never notify, and a post already in the tray is not notified twice.
+
 Debug builds declare `debug.DebugPushReceiver` (in `TMessagesProj/config/debug/AndroidManifest*.xml`, guarded by the `DUMP` permission, so only the shell can send to it). It builds the push Telegram sends for a channel post, encrypts it with the account's push key as the server does and passes it to `PushListenerController.processRemoteMessage`, which tests the whole push path, decryption included, with the process not running:
 
 ```

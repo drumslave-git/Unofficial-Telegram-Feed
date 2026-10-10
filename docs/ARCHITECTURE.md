@@ -182,6 +182,16 @@ Debug builds declare `debug.DebugPushReceiver` (in `TMessagesProj/config/debug/A
 adb shell "am broadcast -n org.unofficial.telegramfeed/org.unofficial.telegramfeed.debug.DebugPushReceiver --es channel_id <id> --es msg_id <id> --es title '<channel>' --es text '<text>'"
 ```
 
+### Read aloud
+
+When a match asks for read-aloud, `RuleNotifications.decide` hands the post's text and its channel's title to `ReadAloudController` (`org.unofficial.telegramfeed.feeds`, one per process, UI thread), unless the rules are paused; a post already queued or read is not queued again. The controller reads one post at a time in the order they came, with Android's `TextToSpeech`:
+
+- `core.SpeechText` turns the post into what is spoken: links become the word for "link", mentions, emoji and formatting marks go, whitespace collapses, a post longer than 600 characters is cut at a sentence end or a word and ends with "… and more", and "New post in <channel>." goes first.
+- The post's language comes from ML Kit's language identification through Telegram's `LanguageDetector`. The words the app adds are in that language when it is English or Ukrainian and in the interface language otherwise (taken from the app's own resources for that language), and the post is spoken with the engine's voice for its language, or for the interface language when the engine has none.
+- Speech uses the media stream (`USAGE_MEDIA`, `CONTENT_TYPE_SPEECH`) with a transient audio focus that lets other audio duck. Losing the focus, to a call or to another app, stops the post; it is read again from the start once the focus returns. While the audio mode is a call or ringing, the queue waits and checks again every 3 seconds.
+- While the queue has work, `ReadAloudService`, a foreground service of type `mediaPlayback` with a silent notification on the channel `tgfeed_read_aloud`, and a partial wake lock keep the process speaking with the screen off and after a push. Android lets a push start it; when Android refuses, speech still runs while the process lives.
+- Pausing the rules stops the post being read and empties the queue. `NotificationCenter.tgfeedReadAloudChanged` (global) is posted whenever the post being read or the queue changes.
+
 ## 9. Upstream merges
 
 The remote `upstream` is https://github.com/DrKLO/Telegram.git. On every Telegram release:

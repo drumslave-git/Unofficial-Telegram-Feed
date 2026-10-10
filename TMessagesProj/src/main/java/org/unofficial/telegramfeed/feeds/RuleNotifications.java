@@ -210,7 +210,19 @@ public class RuleNotifications {
         }
         Notified n = new Notified(match.priority, match.feedId(), String.join(", ", match.ruleNames()));
         remember(dialogId, message.getId(), n);
+        if (match.readAloud) {
+            ReadAloudController.getInstance().enqueue(currentAccount, dialogId, message.getId(), channelTitle(channelId), post.messageOwner.message);
+        }
         return new Decision(true, n);
+    }
+
+    /** The channel's title, from memory or the database; null when unknown. */
+    private String channelTitle(long channelId) {
+        TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(channelId);
+        if (chat == null) {
+            chat = MessagesStorage.getInstance(currentAccount).getChatSync(channelId);
+        }
+        return chat != null ? chat.title : null;
     }
 
     /** Fetches a channel post by id, waiting up to {@link #FETCH_WAIT_MS}; null when it did not come. */

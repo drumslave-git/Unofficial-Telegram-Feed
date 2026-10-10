@@ -389,6 +389,7 @@ public class NotificationCenter {
     public static final int tgfeedRulesChanged = totalEvents++; // TGFEED
     public static final int tgfeedCountsChanged = totalEvents++; // TGFEED
     public static final int tgfeedPauseChanged = totalEvents++; // TGFEED: global
+    public static final int tgfeedReadAloudChanged = totalEvents++; // TGFEED: global, the post read aloud or the queue changed
 
     public static boolean alreadyLogged;
 

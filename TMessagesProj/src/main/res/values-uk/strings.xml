@@ -200,6 +200,11 @@
     <string name="TgfeedUnmute">Увімкнути</string>
     <string name="TgfeedKeepMuted">Залишити вимкненим</string>
     <string name="TgfeedBatteryBanner">Поки телефон спить, Android може затримувати те, що застосунок робить після push, а деякі телефони присипляють застосунок: тоді правила сповіщатимуть пізно або не сповіщатимуть зовсім. Дозвольте застосунку ігнорувати оптимізацію батареї, щоб вони працювали далі.</string>
+    <string name="TgfeedTtsIntro">Новий допис у каналі %1$s.</string>
+    <string name="TgfeedTtsLink">посилання</string>
+    <string name="TgfeedTtsMore">… і далі</string>
+    <string name="TgfeedReadAloudChannel">Читання вголос</string>
+    <string name="TgfeedReadingAloud">Читання дописів уголос</string>
     <string name="AppNameBeta">Telegram Beta</string>
     <string name="LanguageName">Українська</string>
     <string name="English">Англійська</string>

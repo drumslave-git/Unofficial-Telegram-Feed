@@ -4,17 +4,16 @@ Open work only. A task leaves this file in the commit that finishes it; `git log
 
 Legend: `[ ]` not started, `[~]` in progress (name the branch).
 
-**Current phase:** P2 — Feeds. **Next task:** P2-7.
+**Current phase:** P2 — Feeds. **Next task:** P2-8.
 
 The fork of the official Telegram Android client (DrKLO/Telegram, 12.10.6) that takes over three features of the Flutter app `telegram-feed`: feeds that group channels into one timeline, keyword rules per channel that decide which posts notify and are read aloud, and a switch that hides stories. Everything else stays as the official app has it. Each phase from P1 on ends with a tagged release.
 
 ## P2 — Feeds
 
-- [ ] P2-7 Feed search. The magnifier in a feed searches all its channels (`messages.search` per channel, merged), goes to the newest match with the words marked, a bar with arrows and "3 of 47", "Show as list" with the results under the channel names, filter chips for media, links, files, music and voice.
 - [ ] P2-8 Shared media of a feed. The feed's info screen has the Media, Files, Links, Music, Voice and GIFs tabs over all of its channels: `SharedMediaLayout` gets a data source that merges several dialogs.
 - [ ] P2-9 Channels and feeds together. Every channel row in the chat list tags the feeds it belongs to; the long-press menu of a channel row adds it to a feed (or creates the first one); a long press on a folder tab creates a feed from the folder.
 - [ ] P2-10 Counting. The "Count unread posts" switch in Notifications and Sounds decides whether a feed shows posts or channels with unread posts; "Mark as read" on a feed marks every channel of it read. The Feeds tab's counts still include posts a feed's filter hides (the timeline's own counter already leaves them out).
-- [ ] P2-11 Hands-on pass on the spare account in NewsFeed and Real News, light and dark, en and uk (one video post drew as a blank cell in the first timeline build: check video thumbnails in the feed); release 0.2.0.
+- [ ] P2-11 Hands-on pass on the spare account in NewsFeed and Real News, light and dark, en and uk; release 0.2.0.
 
 ## P3 — Rules and notifications
 

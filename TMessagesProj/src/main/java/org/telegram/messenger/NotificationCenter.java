@@ -387,6 +387,7 @@ public class NotificationCenter {
     // TGFEED: the fork's events
     public static final int tgfeedFeedsChanged = totalEvents++;
     public static final int tgfeedRulesChanged = totalEvents++; // TGFEED
+    public static final int tgfeedCountsChanged = totalEvents++; // TGFEED
 
     public static boolean alreadyLogged;
 

@@ -2902,6 +2902,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             observersGroup
                 .add(NotificationCenter.dialogsNeedReload)
                 .add(NotificationCenter.tgfeedFeedsChanged) // TGFEED
+                .add(NotificationCenter.tgfeedCountsChanged) // TGFEED
                 .add(NotificationCenter.dialogFiltersUpdated)
                 .add(NotificationCenter.updateInterfaces)
                 .add(NotificationCenter.encryptedChatUpdated)
@@ -6968,39 +6969,14 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         });
     }
 
-    /** The unread posts of every channel in any feed, each channel counted once. */
+    /** The unread posts of every channel in any feed, each channel counted once, without what the feeds' filters hide. */
     private int tgfeedUnreadPosts() {
-        java.util.HashSet<Long> counted = new java.util.HashSet<>();
-        int count = 0;
-        for (org.unofficial.telegramfeed.core.Feed feed : getAccountInstance().getFeedsController().getFeeds()) {
-            for (long channelId : feed.channelIds) {
-                if (!counted.add(channelId)) {
-                    continue;
-                }
-                TLRPC.Dialog dialog = getMessagesController().getDialog(-channelId);
-                if (dialog != null) {
-                    count += dialog.unread_count;
-                }
-            }
-        }
-        return count;
+        return org.unofficial.telegramfeed.feeds.FeedCounts.getInstance(currentAccount).allUnreadPosts(getAccountInstance().getFeedsController().getFeeds());
     }
 
-    /** The channels with unread posts across every feed, each counted once. */
+    /** The channels across every feed with unread posts that a feed of theirs shows, each counted once. */
     private int tgfeedUnreadChannels() {
-        java.util.HashSet<Long> counted = new java.util.HashSet<>();
-        for (org.unofficial.telegramfeed.core.Feed feed : getAccountInstance().getFeedsController().getFeeds()) {
-            for (long channelId : feed.channelIds) {
-                if (counted.contains(channelId)) {
-                    continue;
-                }
-                TLRPC.Dialog dialog = getMessagesController().getDialog(-channelId);
-                if (dialog != null && (dialog.unread_count > 0 || dialog.unread_mark)) {
-                    counted.add(channelId);
-                }
-            }
-        }
-        return counted.size();
+        return org.unofficial.telegramfeed.feeds.FeedCounts.getInstance(currentAccount).allChannelsWithNewPosts(getAccountInstance().getFeedsController().getFeeds());
     }
 
     private boolean scrollBarVisible = true;
@@ -10727,7 +10703,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     @SuppressWarnings("unchecked")
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
-        if (id == NotificationCenter.tgfeedFeedsChanged || id == NotificationCenter.dialogsNeedReload || id == NotificationCenter.updateInterfaces || id == NotificationCenter.dialogsUnreadCounterChanged) { // TGFEED
+        if (id == NotificationCenter.tgfeedFeedsChanged || id == NotificationCenter.tgfeedCountsChanged || id == NotificationCenter.dialogsNeedReload || id == NotificationCenter.updateInterfaces || id == NotificationCenter.dialogsUnreadCounterChanged) { // TGFEED
             tgfeedUpdate();
         }
         if (id == NotificationCenter.tgfeedFeedsChanged) { // TGFEED: the feed tags on channel rows

@@ -266,6 +266,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         getNotificationCenter().addObserver(this, NotificationCenter.messagesDeleted);
         getNotificationCenter().addObserver(this, NotificationCenter.replaceMessagesObjects);
         getNotificationCenter().addObserver(this, NotificationCenter.tgfeedFeedsChanged);
+        getNotificationCenter().addObserver(this, NotificationCenter.tgfeedCountsChanged);
         getNotificationCenter().addObserver(this, NotificationCenter.updateInterfaces);
         search = new FeedSearch(currentAccount, this::onSearchResults);
         loadInitial();
@@ -280,6 +281,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         getNotificationCenter().removeObserver(this, NotificationCenter.messagesDeleted);
         getNotificationCenter().removeObserver(this, NotificationCenter.replaceMessagesObjects);
         getNotificationCenter().removeObserver(this, NotificationCenter.tgfeedFeedsChanged);
+        getNotificationCenter().removeObserver(this, NotificationCenter.tgfeedCountsChanged);
         getNotificationCenter().removeObserver(this, NotificationCenter.updateInterfaces);
         for (ChannelState state : channels.values()) {
             getConnectionsManager().cancelRequestsForGuid(state.classGuid);
@@ -1529,7 +1531,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                 loadInitial();
             }
             rebuildRows();
-        } else if (id == NotificationCenter.updateInterfaces) {
+        } else if (id == NotificationCenter.updateInterfaces || id == NotificationCenter.tgfeedCountsChanged) {
             updatePagedownButton();
         }
     }
@@ -1838,19 +1840,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         if (show != (pagedownButton.getVisibility() == View.VISIBLE)) {
             pagedownButton.setVisibility(show ? View.VISIBLE : View.INVISIBLE);
         }
-        int unread = 0;
-        for (long channelId : feed.channelIds) {
-            TLRPC.Dialog dialog = getMessagesController().getDialog(-channelId);
-            if (dialog != null) {
-                unread += dialog.unread_count;
-            }
-        }
-        for (MessageObject post : posts.values()) {
-            if (hidden.contains(key(-post.getDialogId(), post.getId())) && isUnread(post)) {
-                unread--;
-            }
-        }
-        pagedownCounter.setCount(Math.max(0, unread), true);
+        pagedownCounter.setCount(org.unofficial.telegramfeed.feeds.FeedCounts.getInstance(currentAccount).unreadPosts(feed), true);
     }
 
     private void restorePosition() {

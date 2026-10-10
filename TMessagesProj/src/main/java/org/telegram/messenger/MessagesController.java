@@ -16181,6 +16181,7 @@ public class MessagesController extends BaseController implements NotificationCe
         getNotificationCenter().postNotificationName(NotificationCenter.appDidLogout);
         getMessagesStorage().cleanup(false);
         org.unofficial.telegramfeed.feeds.RulesController.getInstance(currentAccount).cleanup(); // TGFEED
+        org.unofficial.telegramfeed.feeds.FeedCounts.getInstance(currentAccount).cleanup(); // TGFEED
         org.unofficial.telegramfeed.feeds.FeedsController.getInstance(currentAccount).cleanup(); // TGFEED
         cleanup();
         getContactsController().deleteUnknownAppAccounts();

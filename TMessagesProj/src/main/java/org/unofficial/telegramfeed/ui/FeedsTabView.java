@@ -121,30 +121,14 @@ public class FeedsTabView extends FrameLayout {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     }
 
-    /** The channels of the feed that have unread posts. */
+    /** The channels of the feed with unread posts the feed shows. */
     public static int channelsWithNewPosts(int account, Feed feed) {
-        MessagesController messagesController = MessagesController.getInstance(account);
-        int count = 0;
-        for (long channelId : feed.channelIds) {
-            TLRPC.Dialog dialog = messagesController.getDialog(-channelId);
-            if (dialog != null && (dialog.unread_count > 0 || dialog.unread_mark)) {
-                count++;
-            }
-        }
-        return count;
+        return org.unofficial.telegramfeed.feeds.FeedCounts.getInstance(account).channelsWithNewPosts(feed);
     }
 
-    /** The unread posts of the feed's channels. */
+    /** The unread posts of the feed's channels that the feed shows. */
     public static int unreadPosts(int account, Feed feed) {
-        MessagesController messagesController = MessagesController.getInstance(account);
-        int count = 0;
-        for (long channelId : feed.channelIds) {
-            TLRPC.Dialog dialog = messagesController.getDialog(-channelId);
-            if (dialog != null) {
-                count += dialog.unread_count;
-            }
-        }
-        return count;
+        return org.unofficial.telegramfeed.feeds.FeedCounts.getInstance(account).unreadPosts(feed);
     }
 
     private void createFeed() {

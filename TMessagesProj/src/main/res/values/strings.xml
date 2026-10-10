@@ -21,6 +21,11 @@
     <string name="TgfeedComments">Comments</string>
     <string name="TgfeedShowInChat">Show in chat</string>
     <string name="TgfeedForwarded">Forwarded</string>
+    <string name="TgfeedAddToFeed">Add to feed</string>
+    <string name="TgfeedAddedToFeed">**%1$s** added to **%2$s**</string>
+    <string name="TgfeedRemovedFromFeed">**%1$s** removed from **%2$s**</string>
+    <string name="TgfeedFeedFromFolder">Feed from this folder</string>
+    <string name="TgfeedFolderHasNoChannels">This folder has no channels.</string>
     <string name="TgfeedFeedInfo">Feed info</string>
     <string name="TgfeedNoMedia">No photos or videos in these channels yet.</string>
     <string name="TgfeedNoFiles">No files in these channels yet.</string>

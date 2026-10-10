@@ -154,7 +154,7 @@ public class FeedsTabView extends FrameLayout {
                 if (filter.isDefault()) {
                     continue;
                 }
-                List<Long> channels = channelsOfFolder(filter);
+                List<Long> channels = channelsOfFolder(currentAccount, filter);
                 if (!channels.isEmpty()) {
                     folders.add(filter);
                     folderChannels.add(channels);
@@ -182,8 +182,8 @@ public class FeedsTabView extends FrameLayout {
     }
 
     /** The channels a Telegram folder shows, in the chat list's order. */
-    private List<Long> channelsOfFolder(MessagesController.DialogFilter filter) {
-        MessagesController messagesController = MessagesController.getInstance(currentAccount);
+    public static List<Long> channelsOfFolder(int account, MessagesController.DialogFilter filter) {
+        MessagesController messagesController = MessagesController.getInstance(account);
         List<Long> out = new ArrayList<>();
         for (TLRPC.Dialog dialog : messagesController.getAllDialogs()) {
             if (dialog.id >= 0) {
@@ -193,7 +193,7 @@ public class FeedsTabView extends FrameLayout {
             if (chat == null || !org.telegram.messenger.ChatObject.isChannelAndNotMegaGroup(chat) || chat.left || chat.kicked) {
                 continue;
             }
-            if (filter.includesDialog(org.telegram.messenger.AccountInstance.getInstance(currentAccount), dialog.id, dialog)) {
+            if (filter.includesDialog(org.telegram.messenger.AccountInstance.getInstance(account), dialog.id, dialog)) {
                 out.add(chat.id);
             }
         }

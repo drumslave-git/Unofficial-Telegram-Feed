@@ -550,6 +550,29 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
 
     private int timeLeft;
     private int timeTop;
+    private StaticLayout tgfeedTagLayout; // TGFEED: the feeds a channel belongs to, as a tag before the time
+
+    /** TGFEED: the names of the feeds a channel row is tagged with, or null for no tag. */
+    private String tgfeedTagText() {
+        if (chat == null || !ChatObject.isChannelAndNotMegaGroup(chat) || !(dialogsType == DialogsActivity.DIALOGS_TYPE_DEFAULT || dialogsType == 7 || dialogsType == 8)) {
+            return null;
+        }
+        java.util.List<org.unofficial.telegramfeed.core.Feed> feeds = org.unofficial.telegramfeed.feeds.FeedsController.getInstance(currentAccount).getFeedsOfChannel(chat.id);
+        if (feeds.isEmpty()) {
+            return null;
+        }
+        StringBuilder names = new StringBuilder();
+        for (org.unofficial.telegramfeed.core.Feed feed : feeds) {
+            if (names.length() > 0) {
+                names.append(", ");
+            }
+            names.append(feed.name);
+        }
+        return names.toString();
+    }
+    private int tgfeedTagWidth;
+    private int tgfeedTagLeft;
+    private static Paint tgfeedTagPaint;
     private StaticLayout timeLayout;
 
     private int lock2Left;
@@ -2281,6 +2304,33 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             }
             timeLeftOffset += Theme.dialogs_lock2Drawable.getIntrinsicWidth() + dp(4);
             timeWidth += timeLeftOffset;
+        }
+
+        tgfeedTagLayout = null; // TGFEED: the channel's feeds, as a tag before the time
+        tgfeedTagWidth = 0;
+        String tgfeedNames = drawTime ? tgfeedTagText() : null;
+        if (tgfeedNames != null) {
+            {
+                CharSequence tag = TextUtils.ellipsize(tgfeedNames, Theme.dialogs_timePaint, dp(90), TextUtils.TruncateAt.END);
+                int textWidth = (int) Math.ceil(Theme.dialogs_timePaint.measureText(tag, 0, tag.length()));
+                tgfeedTagLayout = new StaticLayout(tag, Theme.dialogs_timePaint, textWidth, Layout.Alignment.ALIGN_NORMAL, 1.0f, 0.0f, false);
+                tgfeedTagWidth = textWidth + dp(12);
+                int marks = 0; // the clock or the check marks sit left of the time; the tag goes before them
+                if (drawClock) {
+                    marks = Theme.dialogs_clockDrawable.getIntrinsicWidth() + dp(5);
+                } else if (drawCheck2) {
+                    marks = Theme.dialogs_checkDrawable.getIntrinsicWidth() + dp(5);
+                    if (drawCheck1) {
+                        marks += Theme.dialogs_halfCheckDrawable.getIntrinsicWidth() - dp(8);
+                    }
+                }
+                if (!LocaleController.isRTL) {
+                    tgfeedTagLeft = timeLeft - timeLeftOffset - marks - dp(6) - tgfeedTagWidth;
+                } else {
+                    tgfeedTagLeft = timeLeft + timeWidth + marks + dp(6);
+                }
+                timeWidth += tgfeedTagWidth + dp(6);
+            }
         }
 
         if (!LocaleController.isRTL) {
@@ -4119,6 +4169,22 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 }
             }
 
+            if (tgfeedTagLayout != null && timeLayout != null && currentDialogFolderId == 0) { // TGFEED: the feeds tag
+                if (tgfeedTagPaint == null) {
+                    tgfeedTagPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                }
+                tgfeedTagPaint.setColor(Theme.multAlpha(Theme.getColor(Theme.key_chats_unreadCounter, resourcesProvider), 0.14f));
+                float tagTop = timeTop - dp(2);
+                rect.set(tgfeedTagLeft, tagTop, tgfeedTagLeft + tgfeedTagWidth, tagTop + tgfeedTagLayout.getHeight() + dp(4));
+                canvas.drawRoundRect(rect, dp(8), dp(8), tgfeedTagPaint);
+                canvas.save();
+                canvas.translate(tgfeedTagLeft + dp(6), timeTop);
+                int wasColor = Theme.dialogs_timePaint.getColor();
+                Theme.dialogs_timePaint.setColor(Theme.getColor(Theme.key_chats_unreadCounter, resourcesProvider));
+                tgfeedTagLayout.draw(canvas);
+                Theme.dialogs_timePaint.setColor(wasColor);
+                canvas.restore();
+            }
             if (timeLayout != null && currentDialogFolderId == 0) {
                 canvas.save();
                 canvas.translate(timeLeft, timeTop);
@@ -6170,6 +6236,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
         public int lastTopicsCount;
         public boolean lastDrawnPinned;
         public boolean lastDrawnHasCall;
+        public String lastDrawnTgfeedTag; // TGFEED: the feeds the channel is in
 
 
         public float typingProgres;
@@ -6237,7 +6304,9 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             int draftHash = draftMessage == null ? 0 : draftMessage.message.hashCode() + (draftMessage.reply_to != null ? (draftMessage.reply_to.reply_to_msg_id << 16) : 0);
             boolean hasCall = chat != null && chat.call_active && chat.call_not_empty;
             boolean translated = MessagesController.getInstance(currentAccount).getTranslateController().isTranslatingDialog(currentDialogId);
+            String tgfeedTag = tgfeedTagText(); // TGFEED
             if (lastDrawnSizeHash == sizeHash &&
+                    Objects.equals(lastDrawnTgfeedTag, tgfeedTag) && // TGFEED
                     lastDrawnMessageId == messageHash &&
                     lastDrawnTranslated == translated &&
                     lastDrawnDialogId == currentDialogId &&
@@ -6273,6 +6342,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
             if (printingType != null) {
                 lastKnownTypingType = printingType;
             }
+            lastDrawnTgfeedTag = tgfeedTag; // TGFEED
             lastDrawnDialogId = currentDialogId;
             lastDrawnMessageId = messageHash;
             lastDrawnDialogIsFolder = dialog.isFolder;

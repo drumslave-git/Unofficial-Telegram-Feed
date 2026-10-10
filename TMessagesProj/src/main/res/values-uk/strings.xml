@@ -21,6 +21,11 @@
     <string name="TgfeedComments">Коментарі</string>
     <string name="TgfeedShowInChat">Показати в каналі</string>
     <string name="TgfeedForwarded">Переслано</string>
+    <string name="TgfeedAddToFeed">Додати до стрічки</string>
+    <string name="TgfeedAddedToFeed">**%1$s** додано до стрічки **%2$s**</string>
+    <string name="TgfeedRemovedFromFeed">**%1$s** вилучено зі стрічки **%2$s**</string>
+    <string name="TgfeedFeedFromFolder">Стрічка з цієї папки</string>
+    <string name="TgfeedFolderHasNoChannels">У цій папці немає каналів.</string>
     <string name="TgfeedFeedInfo">Про стрічку</string>
     <string name="TgfeedNoMedia">У цих каналах ще немає фото чи відео.</string>
     <string name="TgfeedNoFiles">У цих каналах ще немає файлів.</string>

@@ -3810,6 +3810,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                             .add(R.drawable.msg_edit, defaultTab ? LocaleController.getString(R.string.FilterEditAll) : LocaleController.getString(R.string.FilterEdit), () -> {
                                 presentFragment(defaultTab ? new FiltersSetupActivity() : new FilterCreateActivity(dialogFilter));
                             })
+                            .addIf(dialogFilter != null, R.drawable.msg_list, LocaleController.getString(R.string.TgfeedFeedFromFolder), () -> tgfeedCreateFeedFromFolder(finalFilter)) // TGFEED
                             .addIf(dialogFilter != null && !dialogs.isEmpty(), muteAll ? R.drawable.msg_mute : R.drawable.msg_unmute, muteAll ? LocaleController.getString(R.string.FilterMuteAll) : LocaleController.getString(R.string.FilterUnmuteAll), () -> {
                                 int count = 0;
                                 for (int i = 0; i < dialogs.size(); ++i) {
@@ -6881,6 +6882,92 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
     }
 
+    /** The swipe-back list of feeds for a channel's long-press menu: a check per feed the channel is in, and "New feed". */
+    private LinearLayout tgfeedBuildFeedsMenu(TLRPC.Chat chat, ActionBarPopupWindow.ActionBarPopupWindowLayout[] previewMenu) {
+        org.unofficial.telegramfeed.feeds.FeedsController controller = getAccountInstance().getFeedsController();
+        LinearLayout menuView = new LinearLayout(getParentActivity());
+        menuView.setOrientation(LinearLayout.VERTICAL);
+        ScrollView scrollView = new ScrollView(getParentActivity()) {
+            @Override
+            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec((int) Math.min(MeasureSpec.getSize(heightMeasureSpec), Math.min(AndroidUtilities.displaySize.y * 0.35f, dp(400))), MeasureSpec.getMode(heightMeasureSpec)));
+            }
+        };
+        LinearLayout linearLayout = new LinearLayout(getParentActivity());
+        linearLayout.setOrientation(LinearLayout.VERTICAL);
+        scrollView.addView(linearLayout);
+        for (org.unofficial.telegramfeed.core.Feed feed : controller.getFeeds()) {
+            final boolean contains = feed.channelIds.contains(chat.id);
+            ActionBarMenuSubItem feedItem = new ActionBarMenuSubItem(getParentActivity(), 2, false, false, null);
+            feedItem.setChecked(contains);
+            feedItem.setTextAndIcon(feed.name, 0);
+            feedItem.setMinimumWidth(160);
+            feedItem.setOnClickListener(e -> {
+                org.unofficial.telegramfeed.core.Feed current = controller.getFeed(feed.id);
+                if (current != null) {
+                    if (contains) {
+                        current.removeChannel(chat.id);
+                    } else {
+                        current.addChannel(chat.id);
+                    }
+                    controller.updateFeed(current);
+                    BulletinFactory.of(this).createSimpleBulletin(R.raw.contact_check, AndroidUtilities.replaceTags(LocaleController.formatString(contains ? R.string.TgfeedRemovedFromFeed : R.string.TgfeedAddedToFeed, chat.title, current.name))).show();
+                }
+                hideActionMode(true);
+                finishPreviewFragment();
+            });
+            linearLayout.addView(feedItem);
+        }
+        ActionBarMenuSubItem newFeedItem = new ActionBarMenuSubItem(getParentActivity(), false, true);
+        newFeedItem.setTextAndIcon(LocaleController.getString(R.string.TgfeedNewFeed), R.drawable.msg_add);
+        newFeedItem.setMinimumWidth(160);
+        newFeedItem.setOnClickListener(e -> {
+            finishPreviewFragment();
+            AndroidUtilities.runOnUIThread(() -> tgfeedCreateFeedWithChannel(chat), 250);
+        });
+        linearLayout.addView(newFeedItem);
+        ActionBarPopupWindow.GapView gap = new ActionBarPopupWindow.GapView(getParentActivity(), getResourceProvider(), Theme.key_actionBarDefaultSubmenuSeparator);
+        gap.setTag(R.id.fit_width_tag, 1);
+        ActionBarMenuSubItem backItem = new ActionBarMenuSubItem(getParentActivity(), true, false);
+        backItem.setTextAndIcon(LocaleController.getString(R.string.Back), R.drawable.ic_ab_back);
+        backItem.setMinimumWidth(160);
+        backItem.setOnClickListener(e -> {
+            if (previewMenu[0] != null) {
+                previewMenu[0].getSwipeBack().closeForeground();
+            }
+        });
+        menuView.addView(backItem);
+        menuView.addView(gap, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 8));
+        menuView.addView(scrollView);
+        return menuView;
+    }
+
+    /** Asks for a name and makes a feed of this one channel. */
+    private void tgfeedCreateFeedWithChannel(TLRPC.Chat chat) {
+        org.unofficial.telegramfeed.ui.TgfeedAlerts.promptName(this, LocaleController.getString(R.string.TgfeedNewFeed), "", name -> {
+            ArrayList<Long> ids = new ArrayList<>();
+            ids.add(chat.id);
+            org.unofficial.telegramfeed.core.Feed feed = getAccountInstance().getFeedsController().createFeed(name, ids);
+            BulletinFactory.of(this).createSimpleBulletin(R.raw.contact_check, AndroidUtilities.replaceTags(LocaleController.formatString(R.string.TgfeedAddedToFeed, chat.title, feed.name))).show();
+        });
+    }
+
+    /** Asks for a name, with the folder's as the start, and makes a feed of the folder's channels. */
+    private void tgfeedCreateFeedFromFolder(MessagesController.DialogFilter folder) {
+        if (folder == null) {
+            return;
+        }
+        List<Long> channels = org.unofficial.telegramfeed.ui.FeedsTabView.channelsOfFolder(currentAccount, folder);
+        if (channels.isEmpty()) {
+            BulletinFactory.of(this).createSimpleBulletin(R.raw.chats_infotip, LocaleController.getString(R.string.TgfeedFolderHasNoChannels)).show();
+            return;
+        }
+        org.unofficial.telegramfeed.ui.TgfeedAlerts.promptName(this, LocaleController.getString(R.string.TgfeedNewFeed), folder.name, name -> {
+            org.unofficial.telegramfeed.core.Feed feed = getAccountInstance().getFeedsController().createFeed(name, channels);
+            presentFragment(new org.unofficial.telegramfeed.ui.FeedActivity(feed.id));
+        });
+    }
+
     /** The channels with unread posts across every feed, each counted once. */
     private int tgfeedUnreadChannels() {
         java.util.HashSet<Long> counted = new java.util.HashSet<>();
@@ -8675,8 +8762,16 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             }
         }
 
+        // TGFEED: a channel goes into a feed from its long-press menu
+        final TLRPC.Chat tgfeedChat = dialogId < 0 && communityId == 0 ? getMessagesController().getChat(-dialogId) : null;
+        final boolean tgfeedChannel = tgfeedChat != null && ChatObject.isChannelAndNotMegaGroup(tgfeedChat) && !tgfeedChat.left && !tgfeedChat.kicked;
+        LinearLayout tgfeedMenuView = null;
+        final int[] tgfeedMenu = new int[1];
+        if (tgfeedChannel && !getAccountInstance().getFeedsController().getFeeds().isEmpty()) {
+            tgfeedMenuView = tgfeedBuildFeedsMenu(tgfeedChat, previewMenu);
+        }
         int flags = ActionBarPopupWindow.ActionBarPopupWindowLayout.FLAG_SHOWN_FROM_BOTTOM;
-        if (hasFolders) {
+        if (hasFolders || tgfeedMenuView != null) { // TGFEED
             flags |= ActionBarPopupWindow.ActionBarPopupWindowLayout.FLAG_USE_SWIPEBACK;
         }
 
@@ -8702,6 +8797,36 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                     previewActivity[0].getFragmentView().setLayoutParams(lp);
                 }
             });
+        }
+        if (tgfeedChannel) { // TGFEED
+            if (tgfeedMenuView != null) {
+                tgfeedMenu[0] = previewMenu[0].addViewToSwipeBack(tgfeedMenuView);
+                if (!hasFolders) {
+                    previewMenu[0].getSwipeBack().setOnHeightUpdateListener(height -> {
+                        if (previewActivity[0] == null || previewActivity[0].getFragmentView() == null || !previewActivity[0].isInPreviewMode()) {
+                            return;
+                        }
+                        ViewGroup.LayoutParams lp = previewActivity[0].getFragmentView().getLayoutParams();
+                        if (lp instanceof ViewGroup.MarginLayoutParams) {
+                            ((ViewGroup.MarginLayoutParams) lp).bottomMargin = dp(24 + 16 + 8) + height;
+                            previewActivity[0].getFragmentView().setLayoutParams(lp);
+                        }
+                    });
+                }
+            }
+            final boolean hasFeedsMenu = tgfeedMenuView != null;
+            ActionBarMenuSubItem addToFeedItem = new ActionBarMenuSubItem(getParentActivity(), !hasFolders, false);
+            addToFeedItem.setTextAndIcon(LocaleController.getString(R.string.TgfeedAddToFeed), R.drawable.msg_list);
+            addToFeedItem.setMinimumWidth(160);
+            addToFeedItem.setOnClickListener(e -> {
+                if (hasFeedsMenu) {
+                    previewMenu[0].getSwipeBack().openForeground(tgfeedMenu[0]);
+                } else {
+                    finishPreviewFragment();
+                    AndroidUtilities.runOnUIThread(() -> tgfeedCreateFeedWithChannel(tgfeedChat), 250);
+                }
+            });
+            previewMenu[0].addView(addToFeedItem);
         }
 
         if (!isCommunityCell) {
@@ -10586,6 +10711,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     public void didReceivedNotification(int id, int account, Object... args) {
         if (id == NotificationCenter.tgfeedFeedsChanged || id == NotificationCenter.dialogsNeedReload || id == NotificationCenter.updateInterfaces || id == NotificationCenter.dialogsUnreadCounterChanged) { // TGFEED
             tgfeedUpdate();
+        }
+        if (id == NotificationCenter.tgfeedFeedsChanged) { // TGFEED: the feed tags on channel rows
+            updateVisibleRows(0);
         }
         if (id == NotificationCenter.dialogsNeedReload) {
             if (viewPages == null || dialogsListFrozen) {

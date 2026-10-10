@@ -95,6 +95,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
 
     private static final int MENU_EDIT = 1;
     private static final int MENU_SEARCH = 2;
+    private static final int MENU_INFO = 3;
     private static final int ACTION_COPY = 10;
     private static final int ACTION_FORWARD = 11;
     private static final int ACTION_SHARE = 12;
@@ -336,6 +337,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                 performSearch();
             }
         });
+        menu.addItem(MENU_INFO, R.drawable.msg_info).setContentDescription(LocaleController.getString(R.string.TgfeedFeedInfo));
         menu.addItem(MENU_EDIT, R.drawable.msg_edit).setContentDescription(LocaleController.getString(R.string.TgfeedEditChannels));
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
@@ -348,6 +350,8 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                     }
                 } else if (id == MENU_EDIT) {
                     presentFragment(new FeedEditActivity(feedId));
+                } else if (id == MENU_INFO) {
+                    presentFragment(new FeedInfoActivity(feedId));
                 } else if (id == ACTION_COPY) {
                     copyPosts(new ArrayList<>(selectedPosts.values()));
                     clearSelection();

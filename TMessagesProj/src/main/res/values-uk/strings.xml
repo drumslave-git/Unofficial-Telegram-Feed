@@ -21,6 +21,13 @@
     <string name="TgfeedComments">Коментарі</string>
     <string name="TgfeedShowInChat">Показати в каналі</string>
     <string name="TgfeedForwarded">Переслано</string>
+    <string name="TgfeedFeedInfo">Про стрічку</string>
+    <string name="TgfeedNoMedia">У цих каналах ще немає фото чи відео.</string>
+    <string name="TgfeedNoFiles">У цих каналах ще немає файлів.</string>
+    <string name="TgfeedNoLinks">У цих каналах ще немає посилань.</string>
+    <string name="TgfeedNoMusic">У цих каналах ще немає музики.</string>
+    <string name="TgfeedNoVoice">У цих каналах ще немає голосових повідомлень.</string>
+    <string name="TgfeedNoGifs">У цих каналах ще немає GIF.</string>
     <string name="TgfeedNoPostsPassFilter">Жоден допис не проходить фільтр.</string>
     <string name="TgfeedFilterHeader">Фільтр</string>
     <string name="TgfeedFilterShow">Показувати</string>

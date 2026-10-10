@@ -1430,7 +1430,7 @@ public class NotificationsController extends BaseController implements Notificat
             intent.putExtra("title", title);
         }
         PendingIntent pending = PendingIntent.getBroadcast(ApplicationLoader.applicationContext, requestCode, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        builder.addAction(reading ? R.drawable.msg_voice_muted : R.drawable.msg_voice_unmuted, LocaleController.getString(reading ? R.string.TgfeedStop : R.string.TgfeedListen), pending);
+        builder.addAction(R.drawable.msg_voice_speaker, LocaleController.getString(reading ? R.string.TgfeedStop : R.string.TgfeedListen), pending);
     }
 
     private boolean tgfeedRuleNotified(long dialogId) {

@@ -305,7 +305,7 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
         }
         String introLanguage = "en".equals(item.language) || "uk".equals(item.language) ? item.language : interfaceLanguage();
         Context words = localized(introLanguage);
-        item.spoken = SpeechText.prepare(item.text, item.channelTitle, SpeechText.DEFAULT_MAX_CHARS,
+        item.spoken = SpeechText.prepare(item.text, item.channelTitle, ReadAloudSettings.getMaxChars(),
                 words.getString(R.string.TgfeedTtsLink), words.getString(R.string.TgfeedTtsMore),
                 channel -> words.getString(R.string.TgfeedTtsIntro, channel));
         if (item.spoken.isEmpty()) {
@@ -322,14 +322,10 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
             AndroidUtilities.runOnUIThread(retry, CALL_RETRY_MS);
             return;
         }
-        String language = item.language == null || UNDETERMINED.equals(item.language) ? interfaceLanguage() : item.language;
-        Locale locale = Locale.forLanguageTag(language);
-        int available = tts.isLanguageAvailable(locale);
-        if (available >= TextToSpeech.LANG_AVAILABLE) {
-            tts.setLanguage(locale);
-        } else {
-            tts.setLanguage(Locale.forLanguageTag(interfaceLanguage()));
-        }
+        String language = item.language == null || UNDETERMINED.equals(item.language) ? fallbackLanguage() : item.language;
+        int available = applyVoice(tts, language);
+        tts.setSpeechRate(ReadAloudSettings.getRate());
+        tts.setPitch(ReadAloudSettings.getPitch());
         speaking = true;
         String id = "tgfeed_" + (++utteranceSerial);
         Bundle params = new Bundle();
@@ -560,8 +556,39 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
         }
     }
 
+    /** The language for posts whose language is unknown: the chosen one, or the interface language. */
+    private static String fallbackLanguage() {
+        String chosen = ReadAloudSettings.getFallbackLanguage();
+        return TextUtils.isEmpty(chosen) ? interfaceLanguage() : chosen;
+    }
+
+    /**
+     * Sets the engine's voice for a language: the chosen voice when the engine still has it, the
+     * engine's default voice for the language otherwise, and for the interface language when the
+     * engine has none for it. Returns what {@link TextToSpeech#isLanguageAvailable} said.
+     */
+    public static int applyVoice(TextToSpeech tts, String language) {
+        String voiceName = ReadAloudSettings.getVoice(language);
+        if (voiceName != null) {
+            try {
+                for (android.speech.tts.Voice voice : tts.getVoices()) {
+                    if (voiceName.equals(voice.getName())) {
+                        tts.setVoice(voice);
+                        return TextToSpeech.LANG_AVAILABLE;
+                    }
+                }
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        }
+        Locale locale = Locale.forLanguageTag(language);
+        int available = tts.isLanguageAvailable(locale);
+        tts.setLanguage(available >= TextToSpeech.LANG_AVAILABLE ? locale : Locale.forLanguageTag(interfaceLanguage()));
+        return available;
+    }
+
     /** "en" or "uk": the interface language when the fork has its words, English otherwise. */
-    private static String interfaceLanguage() {
+    public static String interfaceLanguage() {
         Locale locale = LocaleController.getInstance().getCurrentLocale();
         return locale != null && "uk".equals(locale.getLanguage()) ? "uk" : "en";
     }

@@ -55,7 +55,7 @@ public class ReadingBanner extends FrameLayout implements NotificationCenter.Not
 
         icon = new ImageView(context);
         icon.setScaleType(ImageView.ScaleType.CENTER);
-        icon.setImageResource(R.drawable.msg_voice_unmuted);
+        icon.setImageResource(R.drawable.msg_voice_speaker);
         row.addView(icon, LayoutHelper.createLinear(24, 24, Gravity.CENTER_VERTICAL, 16, 0, 0, 0));
 
         LinearLayout texts = new LinearLayout(context);

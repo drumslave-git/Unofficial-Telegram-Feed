@@ -693,6 +693,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(UItem.asCustom(tgfeedPauseBanner)); // TGFEED
         items.add(UItem.asCheck(100, getString(R.string.TgfeedHideStories)).setChecked(SharedConfig.tgfeedHideStories));
         items.add(UItem.asButton(101, R.drawable.msg_notifications, getString(R.string.TgfeedRules))); // TGFEED
+        items.add(UItem.asButton(102, R.drawable.msg_voice_speaker, getString(R.string.TgfeedReadAloudTitle))); // TGFEED
         items.add(UItem.asShadow(null));
 
         items.add(SettingCell.Factory.of(1, IconBackgroundColors.BLUE.top, IconBackgroundColors.BLUE.bottom, R.drawable.settings_account, getString(R.string.SettingsAccount), getString(R.string.SettingsAccountInfo)));
@@ -822,6 +823,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             return;
         }
         switch (item.id) {
+            case 102: // TGFEED
+                presentFragment(new org.unofficial.telegramfeed.ui.ReadAloudActivity()); // TGFEED
+                break; // TGFEED
             case 101: // TGFEED
                 presentFragment(new org.unofficial.telegramfeed.ui.RulesActivity()); // TGFEED
                 break; // TGFEED

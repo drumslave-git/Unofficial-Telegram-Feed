@@ -1,6 +1,8 @@
 package org.unofficial.telegramfeed.feeds;
 
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BaseController;
+import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.UserConfig;
 import org.unofficial.telegramfeed.core.Feed;
@@ -10,9 +12,12 @@ import org.unofficial.telegramfeed.core.RuleMatcher;
 
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The rules of one account, kept in memory on the UI thread and written through to the
@@ -48,6 +53,29 @@ public class RulesController extends BaseController {
     private boolean loaded;
     private boolean loading;
 
+    /** The rules and feeds as other threads see them: copies, replaced whole on every change. */
+    public static final class Snapshot {
+        public final List<Rule> rules;
+        public final Map<Long, RuleMatcher.FeedScope> feeds;
+
+        Snapshot(List<Rule> rules, Map<Long, RuleMatcher.FeedScope> feeds) {
+            this.rules = rules;
+            this.feeds = feeds;
+        }
+
+        public boolean hasEnabledRules(long channelId) {
+            for (Rule rule : rules) {
+                if (rule.enabled && rule.channelId == channelId) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    private volatile Snapshot snapshot;
+    private final List<CountDownLatch> snapshotWaiters = new ArrayList<>();
+
     public RulesController(int account) {
         super(account);
     }
@@ -69,6 +97,65 @@ public class RulesController extends BaseController {
             loading = false;
             changed();
         });
+    }
+
+    /**
+     * Builds the snapshot for other threads once both the rules and the feeds are in. Called on
+     * the UI thread after every change of either.
+     */
+    public void publish() {
+        FeedsController feedsController = FeedsController.getInstance(currentAccount);
+        if (!loaded || !feedsController.isLoaded()) {
+            return;
+        }
+        List<Rule> copies = new ArrayList<>();
+        for (Rule rule : rules) {
+            copies.add(new Rule(rule));
+        }
+        Map<Long, RuleMatcher.FeedScope> scopes = new HashMap<>();
+        for (Feed feed : feedsController.getFeeds()) {
+            scopes.put(feed.id, new RuleMatcher.FeedScope(new ArrayList<>(feed.channelIds), new FeedFilter(feed.filter), feed.showWholePost));
+        }
+        snapshot = new Snapshot(Collections.unmodifiableList(copies), Collections.unmodifiableMap(scopes));
+        synchronized (snapshotWaiters) {
+            for (CountDownLatch latch : snapshotWaiters) {
+                latch.countDown();
+            }
+            snapshotWaiters.clear();
+        }
+    }
+
+    /**
+     * The snapshot for a background thread; loads the rules and feeds when needed and waits for
+     * them up to {@code timeoutMs}. Null when they did not come in time. Never call it on the UI thread.
+     */
+    public Snapshot awaitSnapshot(long timeoutMs) {
+        Snapshot current = snapshot;
+        if (current != null) {
+            return current;
+        }
+        CountDownLatch latch = new CountDownLatch(1);
+        synchronized (snapshotWaiters) {
+            snapshotWaiters.add(latch);
+        }
+        AndroidUtilities.runOnUIThread(() -> {
+            FeedsController.getInstance(currentAccount).loadFeeds();
+            loadRules();
+            publish();
+        });
+        try {
+            latch.await(timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException ignore) {
+        }
+        return snapshot;
+    }
+
+    /** Matches a Telegram message of a channel against a snapshot; null when no rule matches. */
+    public RuleMatcher.Match match(Snapshot snapshot, long channelId, MessageObject message) {
+        long date = message.messageOwner.date;
+        Calendar when = Calendar.getInstance();
+        when.setTimeInMillis(date * 1000L);
+        return matcher.evaluate(snapshot.rules, snapshot.feeds, channelId, PostFilter.describe(message), date, when);
     }
 
     public boolean isLoaded() {
@@ -199,6 +286,7 @@ public class RulesController extends BaseController {
     }
 
     private void changed() {
+        publish();
         getNotificationCenter().postNotificationName(NotificationCenter.tgfeedRulesChanged);
     }
 
@@ -207,6 +295,7 @@ public class RulesController extends BaseController {
         rules.clear();
         loaded = false;
         loading = false;
+        snapshot = null;
         changed();
     }
 }

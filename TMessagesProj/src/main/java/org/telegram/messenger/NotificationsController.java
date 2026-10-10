@@ -128,6 +128,7 @@ public class NotificationsController extends BaseController implements Notificat
     private int total_unread_count = 0;
     private int personalCount = 0;
     private boolean notifyCheck = false;
+    private org.unofficial.telegramfeed.feeds.RuleNotifications.Notified tgfeedLastNotified; // TGFEED: the rule match of the newest message being shown
     private int lastOnlineFromOtherDevice = 0;
     private boolean inChatSoundEnabled;
     private int lastBadgeCount = -1;
@@ -1184,6 +1185,11 @@ public class NotificationsController extends BaseController implements Notificat
                     }
                     continue;
                 }
+                // TGFEED: a channel with enabled rules notifies only for posts a rule matches, muted or not
+                org.unofficial.telegramfeed.feeds.RuleNotifications.Decision tgfeedDecision = org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).decide(messageObject, isChannel, isFcm);
+                if (tgfeedDecision != null && !tgfeedDecision.show) {
+                    continue;
+                }
                 if (isFcm && !messageObject.isOauthPush) {
                     getMessagesStorage().putPushMessage(messageObject);
                 }
@@ -1235,6 +1241,9 @@ public class NotificationsController extends BaseController implements Notificat
                     settingsCache.put(dialogId, value);
                 }
 
+                if (tgfeedDecision != null) { // TGFEED: a rule matched
+                    value = true;
+                }
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.d("NotificationsController: process new messages, value is " + value + " ("+dialogId+", "+isChannel+", "+messageObject.isReactionPush+", "+messageObject.isStoryReactionPush+")");
                 }
@@ -1318,6 +1327,9 @@ public class NotificationsController extends BaseController implements Notificat
                     } else {
                         canAddValue = notifyOverride != 2;
                     }
+                    if (org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).governs(dialog_id)) { // TGFEED: counted when a rule notified
+                        canAddValue = tgfeedRuleNotified(dialog_id);
+                    }
 
                     Integer currentCount = pushDialogs.get(dialog_id);
                     int newCount = currentCount != null ? currentCount + 1 : 1;
@@ -1389,6 +1401,18 @@ public class NotificationsController extends BaseController implements Notificat
         return total_unread_count;
     }
 
+    // TGFEED: whether a message of the dialog waiting in the tray notified through a rule
+    private boolean tgfeedRuleNotified(long dialogId) {
+        org.unofficial.telegramfeed.feeds.RuleNotifications rules = org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount);
+        for (int i = 0; i < pushMessages.size(); i++) {
+            MessageObject message = pushMessages.get(i);
+            if (message.getDialogId() == dialogId && rules.get(dialogId, message.getId()) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public void processDialogsUpdateRead(LongSparseIntArray dialogsToUpdate) {
         ArrayList<MessageObject> popupArrayToRemove = new ArrayList<>();
         notificationsQueue.postRunnable(() -> {
@@ -1420,6 +1444,9 @@ public class NotificationsController extends BaseController implements Notificat
                     }
                 } else {
                     canAddValue = true;
+                }
+                if (org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).governs(dialogId)) { // TGFEED: counted when a rule notified
+                    canAddValue = tgfeedRuleNotified(dialogId);
                 }
 
                 if (notifyCheck && !canAddValue) {
@@ -1576,6 +1603,9 @@ public class NotificationsController extends BaseController implements Notificat
                         }
                         settingsCache.put(dialog_id, value);
                     }
+                    if (org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).governs(dialog_id)) { // TGFEED: only what a rule notified
+                        value = org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).get(dialog_id, message.id) != null;
+                    }
                     if (!value || dialog_id == openedDialogId && ApplicationLoader.isScreenOn) {
                         continue;
                     }
@@ -1606,6 +1636,9 @@ public class NotificationsController extends BaseController implements Notificat
                     }
 
                     settingsCache.put(dialog_id, value);
+                }
+                if (org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).governs(dialog_id)) { // TGFEED: counted when a rule notified
+                    value = pushMessagesDict.get(dialog_id) != null;
                 }
                 if (!value) {
                     continue;
@@ -1650,6 +1683,9 @@ public class NotificationsController extends BaseController implements Notificat
                             value = notifyOverride != 2;
                         }
                         settingsCache.put(dialogId, value);
+                    }
+                    if (org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).governs(dialogId)) { // TGFEED: only what a rule notified
+                        value = org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).get(dialogId, mid) != null;
                     }
                     if (!value || dialogId == openedDialogId && ApplicationLoader.isScreenOn) {
                         continue;
@@ -4240,6 +4276,10 @@ public class NotificationsController extends BaseController implements Notificat
             } else {
                 value = notifyOverride != 2;
             }
+            tgfeedLastNotified = story ? null : org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).get(dialog_id, lastMessageObject.getId()); // TGFEED
+            if (tgfeedLastNotified != null) {
+                value = true;
+            }
 
             String name;
             String chatName;
@@ -4393,6 +4433,12 @@ public class NotificationsController extends BaseController implements Notificat
 
             if (!notifyDisabled && !preferences.getBoolean("sound_enabled_" + getSharedPrefKey(dialog_id, topicId), true)) {
                 notifyDisabled = true;
+            }
+            if (tgfeedLastNotified != null) { // TGFEED: a rule's priority decides, not the dialog's sound settings nor a post sent silently
+                notifyDisabled = !notifyAboutLast || MediaController.getInstance().isRecordingAudio() || tgfeedLastNotified.priority == org.unofficial.telegramfeed.core.Rule.PRIORITY_SILENT;
+                if (BuildVars.LOGS_ENABLED) {
+                    FileLog.d("tgfeed rules: notify " + dialog_id + "/" + lastMessageObject.getId() + " notifyAboutLast=" + notifyAboutLast + " silent=" + silent + " priority=" + tgfeedLastNotified.priority + " -> notifyDisabled=" + notifyDisabled);
+                }
             }
 
             String defaultPath = Settings.System.DEFAULT_NOTIFICATION_URI.getPath();
@@ -4833,6 +4879,9 @@ public class NotificationsController extends BaseController implements Notificat
         FileLog.d("showExtraNotifications pushMessages.size()=" + pushMessages.size());
         if (Build.VERSION.SDK_INT >= 26) {
             notificationBuilder.setChannelId(validateChannelId(lastDialogId, lastTopicId, chatName, vibrationPattern, ledColor, sound, importance, isDefault, isInApp, isSilent, chatType));
+            if (tgfeedLastNotified != null && (!isSilent || tgfeedLastNotified.priority == org.unofficial.telegramfeed.core.Rule.PRIORITY_SILENT)) { // TGFEED: the rule priority's channel
+                notificationBuilder.setChannelId(org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).channelFor(tgfeedLastNotified.priority));
+            }
         }
         Notification mainNotification = notificationBuilder.build();
         if (Build.VERSION.SDK_INT <= 19) {
@@ -5663,6 +5712,15 @@ public class NotificationsController extends BaseController implements Notificat
             }
             if (sortedDialogs.size() == 1 && !TextUtils.isEmpty(summary) && !dialogKey.story) {
                 builder.setSubText(summary);
+            }
+            if (!dialogKey.story) { // TGFEED: a rule notification names its rules
+                for (int i = 0; i < messageObjects.size(); i++) {
+                    org.unofficial.telegramfeed.feeds.RuleNotifications.Notified notified = org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).get(dialogId, messageObjects.get(i).getId());
+                    if (notified != null && !TextUtils.isEmpty(notified.names)) {
+                        builder.setSubText(notified.names);
+                        break;
+                    }
+                }
             }
             if (DialogObject.isEncryptedDialog(dialogId)) {
                 builder.setLocalOnly(true);

@@ -21,6 +21,10 @@
     <string name="TgfeedComments">Comments</string>
     <string name="TgfeedShowInChat">Show in chat</string>
     <string name="TgfeedForwarded">Forwarded</string>
+    <string name="TgfeedRuleChannels">Rules</string>
+    <string name="TgfeedRuleChannelSilent">Rules: silent</string>
+    <string name="TgfeedRuleChannelNormal">Rules: normal</string>
+    <string name="TgfeedRuleChannelUrgent">Rules: urgent</string>
     <string name="TgfeedCountPosts">Count unread posts</string>
     <string name="TgfeedCountPostsInfo">Feeds count their unread posts; off, they count channels with new posts.</string>
     <string name="TgfeedAddToFeed">Add to feed</string>

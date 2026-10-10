@@ -57,7 +57,7 @@ public class FeedsController extends BaseController {
             feeds.addAll(result);
             loaded = true;
             loading = false;
-            getNotificationCenter().postNotificationName(NotificationCenter.tgfeedFeedsChanged);
+            changed();
         });
     }
 
@@ -139,6 +139,7 @@ public class FeedsController extends BaseController {
     }
 
     private void changed() {
+        RulesController.getInstance(currentAccount).publish();
         getNotificationCenter().postNotificationName(NotificationCenter.tgfeedFeedsChanged);
     }
 

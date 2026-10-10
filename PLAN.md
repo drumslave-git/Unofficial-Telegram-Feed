@@ -4,13 +4,12 @@ Open work only. A task leaves this file in the commit that finishes it; `git log
 
 Legend: `[ ]` not started, `[~]` in progress (name the branch).
 
-**Current phase:** P3 — Rules and notifications. **Next task:** P3-2.
+**Current phase:** P3 — Rules and notifications. **Next task:** P3-3.
 
 The fork of the official Telegram Android client (DrKLO/Telegram, 12.10.6) that takes over three features of the Flutter app `telegram-feed`: feeds that group channels into one timeline, keyword rules per channel that decide which posts notify and are read aloud, and a switch that hides stories. Everything else stays as the official app has it. Each phase from P1 on ends with a tagged release.
 
 ## P3 — Rules and notifications
 
-- [ ] P3-2 Notification hook. In `NotificationsController.processNewMessages` and `processLoadedUnreadMessages` (the push path): a post of a channel with at least one enabled rule is dropped unless a rule matches; a matching post takes the highest matching priority, names the rule in the notification, and is grouped per channel as Telegram groups a chat. Silent goes to the tray only, normal pops up, urgent breaks through Do Not Disturb where Android permits, each through its own notification channel. Edited posts are not matched again and do not sound again. Channels without rules are untouched.
 - [ ] P3-3 Rules UI. The rules list (every rule under its channel, with the feed's name where scoped) reached from the "Unofficial Telegram Feed" settings section, from a channel's profile and its notification settings ("Rules" row), and from a feed's menu. The rule editor: name and switch, channel, optional feed, the condition as a visual builder or as text with its syntax sheet, a dry run over the channel's recent posts that says how many posts it checked and would have matched, priority with an explanation of each level and a shortcut to Android's Do Not Disturb setting for urgent, read aloud, schedule. Leaving with unsaved changes asks first. Saving the first rule asks for the notification permission.
 - [ ] P3-4 Pause. A bell-with-slash button in the chat list's action bar pauses every rule and the speech until pressed again, surviving restarts; while paused it is red and a banner under the action bar of every screen says so with "Resume".
 - [ ] P3-5 Sounds. Notifications and Sounds gets a "Rules" block: sound and vibration for normal and for urgent rule notifications, applied at once.

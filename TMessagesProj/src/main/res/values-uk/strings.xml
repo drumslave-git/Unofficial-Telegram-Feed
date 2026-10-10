@@ -21,6 +21,10 @@
     <string name="TgfeedComments">Коментарі</string>
     <string name="TgfeedShowInChat">Показати в каналі</string>
     <string name="TgfeedForwarded">Переслано</string>
+    <string name="TgfeedRuleChannels">Правила</string>
+    <string name="TgfeedRuleChannelSilent">Правила: тихі</string>
+    <string name="TgfeedRuleChannelNormal">Правила: звичайні</string>
+    <string name="TgfeedRuleChannelUrgent">Правила: термінові</string>
     <string name="TgfeedCountPosts">Рахувати непрочитані дописи</string>
     <string name="TgfeedCountPostsInfo">Стрічки рахують непрочитані дописи; якщо вимкнено — канали з новими дописами.</string>
     <string name="TgfeedAddToFeed">Додати до стрічки</string>

@@ -901,6 +901,7 @@ public class CallLogActivity extends BaseFragment implements NotificationCenter.
 			blur3_InvalidateBlur();
 			checkUi_listViewPadding();
 		});
+		org.unofficial.telegramfeed.ui.PauseBanner.addTo(topPanelLayout, false); // TGFEED: the pause banner, first of the panels
 
 		BlurredBackgroundDrawable topPanelLayoutBackground = iBlur3FactoryLiquidGlass.create(topPanelLayout, BlurredBackgroundProviderImpl.topPanel(resourceProvider));
 		topPanelLayoutBackground.setRadius(dp(24));

@@ -500,6 +500,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     private ValueAnimator contactsAlphaAnimator;
     private ViewPage[] viewPages;
     private ActionBarMenuItem passcodeItem;
+    private ActionBarMenuItem tgfeedPauseItem; // TGFEED
     private ActionBarMenuItem downloadsItem;
     private DownloadProgressIcon downloadProgressIcon;
     private boolean downloadsItemVisible;
@@ -3271,6 +3272,9 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             passcodeItem = menu.addItem(1, R.drawable.outline_header_lock_24);
             passcodeItem.setContentDescription(getString(R.string.AccDescrPasscodeLock));
 
+            tgfeedPauseItem = menu.addItem(120, R.drawable.outline_profile_unmute_24); // TGFEED: pauses every rule and the speech
+            org.unofficial.telegramfeed.ui.PauseBanner.bindPauseButton(tgfeedPauseItem); // TGFEED
+
             downloadsItem = menu.addItem(3, new ColorDrawable(Color.TRANSPARENT));
             downloadsItem.addView(downloadProgressIcon = new DownloadProgressIcon(currentAccount, context));
             downloadsItem.setContentDescription(getString(R.string.DownloadsTabs));
@@ -4867,6 +4871,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 updateDialogsHint();
             });
             topPanelLayout.addView(dialogsHintCell);
+            org.unofficial.telegramfeed.ui.PauseBanner.addTo(topPanelLayout, false); // TGFEED: the pause banner, first of the panels
 
 
             if (communityId != 0) {

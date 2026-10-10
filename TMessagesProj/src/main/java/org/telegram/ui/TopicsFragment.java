@@ -1430,6 +1430,7 @@ public class TopicsFragment extends BaseFragment implements NotificationCenter.N
             blur3_InvalidateBlur();
             checkUi_listViewPadding();
         });
+        org.unofficial.telegramfeed.ui.PauseBanner.addTo(topPanelLayout, false); // TGFEED: the pause banner, first of the panels
 
         contentView.addView(topPanelLayout, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP, 0, -14, 0, 0));
 

@@ -166,6 +166,19 @@ public class SharedConfig {
                 .apply();
     }
 
+    // TGFEED: the pause of every rule and the speech, device-wide, kept across restarts.
+    public static void setTgfeedRulesPaused(boolean paused) {
+        if (tgfeedRulesPaused == paused) {
+            return;
+        }
+        tgfeedRulesPaused = paused;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("tgfeedRulesPaused", paused)
+                .apply();
+        NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.tgfeedPauseChanged);
+    }
+
     public static void toggleSurfaceInStories() {
         useSurfaceInStories = !useSurfaceInStories;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
@@ -282,6 +295,7 @@ public class SharedConfig {
     public static boolean bigCameraForRound;
     public static boolean tgfeedHideStories; // TGFEED
     public static boolean tgfeedCountPosts = true; // TGFEED: feeds count unread posts, or channels with new posts
+    public static boolean tgfeedRulesPaused; // TGFEED: every rule and the speech are paused
     public static Boolean useCamera2Force;
     public static boolean useNewBlur;
     public static boolean useSurfaceInStories;
@@ -692,6 +706,7 @@ public class SharedConfig {
             bigCameraForRound = preferences.getBoolean("bigCameraForRound", false);
             tgfeedHideStories = preferences.getBoolean("tgfeedHideStories", false); // TGFEED
             tgfeedCountPosts = preferences.getBoolean("tgfeedCountPosts", true); // TGFEED
+            tgfeedRulesPaused = preferences.getBoolean("tgfeedRulesPaused", false); // TGFEED
             useNewBlur = preferences.getBoolean("useNewBlur", true);
             useCamera2Force = !preferences.contains("useCamera2Force_2") ? null : preferences.getBoolean("useCamera2Force_2", false);
             useSurfaceInStories = preferences.getBoolean("useSurfaceInStories", Build.VERSION.SDK_INT >= 30);

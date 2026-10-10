@@ -611,6 +611,8 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
     }
 
     private ArrayList<Integer> accountNumbers = new ArrayList<>();
+    private org.unofficial.telegramfeed.ui.PauseBanner tgfeedPauseBanner; // TGFEED
+
     private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
         if (searchItem.isSearchFieldVisible2()) {
             items.add(UItem.asSpace(ActionBar.getCurrentActionBarHeight()));
@@ -687,6 +689,8 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
 
         // TGFEED: the fork's own settings section before Chat Settings
         items.add(UItem.asHeader(getString(R.string.TgfeedSettings)));
+        if (tgfeedPauseBanner == null) tgfeedPauseBanner = new org.unofficial.telegramfeed.ui.PauseBanner(getContext(), null, false); // TGFEED: shown while paused
+        items.add(UItem.asCustom(tgfeedPauseBanner)); // TGFEED
         items.add(UItem.asCheck(100, getString(R.string.TgfeedHideStories)).setChecked(SharedConfig.tgfeedHideStories));
         items.add(UItem.asButton(101, R.drawable.msg_notifications, getString(R.string.TgfeedRules))); // TGFEED
         items.add(UItem.asShadow(null));

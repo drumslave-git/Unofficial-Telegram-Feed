@@ -18,6 +18,7 @@ import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.R;
+import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
@@ -184,6 +185,12 @@ public class RuleNotifications {
         RulesController.Snapshot snapshot = controller.awaitSnapshot(SNAPSHOT_WAIT_MS);
         if (snapshot == null || !snapshot.hasEnabledRules(channelId)) {
             return null;
+        }
+        if (SharedConfig.tgfeedRulesPaused) {
+            if (BuildVars.LOGS_ENABLED) {
+                FileLog.d("tgfeed rules: channel " + channelId + " message " + message.getId() + " -> paused");
+            }
+            return new Decision(false, null);
         }
         MessageObject post = message;
         if (isFcm || message.isFcmMessage()) {

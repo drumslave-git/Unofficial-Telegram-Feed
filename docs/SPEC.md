@@ -69,7 +69,7 @@ The primary user follows 20 to 200 Telegram channels (news, niche communities, a
 - An edited post is not matched again and does not sound again.
 - Android has to allow notifications at all; the app asks for that when I save my first rule.
 - Notifications and Sounds has a "Rules" block with the sound and vibration of normal and of urgent rule notifications, applied at once.
-- A bell-with-slash button in the chat list's action bar pauses every rule and the speech until I press it again, also after the app or the phone restarts. While paused, the button is red and a banner under the action bar of every screen says so, with "Resume".
+- A bell-with-slash button in the chat list's action bar pauses every rule and the speech until I press it again, also after the app or the phone restarts. While paused, the button is red and a banner with "Resume" says so: under the action bar of the chat list, of chats and of every screen with a plain action bar, and first in the fork's section of Settings.
 
 ### While the app is closed
 

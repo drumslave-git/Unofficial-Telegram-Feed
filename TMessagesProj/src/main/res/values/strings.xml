@@ -175,6 +175,10 @@
     <string name="TgfeedNotifyAskText">This rule notifies you about the posts it matches, which Android has to allow. Without it the rule still runs, but stays silent.</string>
     <string name="TgfeedNotNow">Not now</string>
     <string name="TgfeedAllow">Allow</string>
+    <string name="TgfeedPausedBanner">Notifications are paused. Rules notify about nothing and read nothing aloud.</string>
+    <string name="TgfeedResume">Resume</string>
+    <string name="TgfeedPauseNotifications">Pause notifications</string>
+    <string name="TgfeedResumeNotifications">Resume notifications</string>
     <string name="AppNameBeta">Telegram Beta</string>
     <string name="LanguageName">English</string>
     <string name="English">English</string>

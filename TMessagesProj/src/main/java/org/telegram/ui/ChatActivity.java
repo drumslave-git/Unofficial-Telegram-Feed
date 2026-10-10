@@ -4128,6 +4128,7 @@ public class ChatActivity extends BaseFragment implements
             checkUi_messagesSearchListPadding();
             checkUi_topFade();
         });
+        org.unofficial.telegramfeed.ui.PauseBanner.addTo(topPanelLayout, true); // TGFEED: the pause banner, first of the panels
         if (avatarContainer != null) {
             avatarContainer.onDestroy();
         }

@@ -388,6 +388,7 @@ public class NotificationCenter {
     public static final int tgfeedFeedsChanged = totalEvents++;
     public static final int tgfeedRulesChanged = totalEvents++; // TGFEED
     public static final int tgfeedCountsChanged = totalEvents++; // TGFEED
+    public static final int tgfeedPauseChanged = totalEvents++; // TGFEED: global
 
     public static boolean alreadyLogged;
 

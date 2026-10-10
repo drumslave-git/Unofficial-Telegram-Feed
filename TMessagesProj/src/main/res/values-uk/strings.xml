@@ -185,6 +185,10 @@
     <string name="TgfeedNotifyAskText">Це правило сповіщає про дописи, які йому відповідають, і для цього потрібен дозвіл Android. Без нього правило все одно працюватиме, але мовчки.</string>
     <string name="TgfeedNotNow">Не зараз</string>
     <string name="TgfeedAllow">Дозволити</string>
+    <string name="TgfeedPausedBanner">Сповіщення призупинено. Правила не надсилають сповіщень і нічого не читають уголос.</string>
+    <string name="TgfeedResume">Відновити</string>
+    <string name="TgfeedPauseNotifications">Призупинити сповіщення</string>
+    <string name="TgfeedResumeNotifications">Відновити сповіщення</string>
     <string name="AppNameBeta">Telegram Beta</string>
     <string name="LanguageName">Українська</string>
     <string name="English">Англійська</string>

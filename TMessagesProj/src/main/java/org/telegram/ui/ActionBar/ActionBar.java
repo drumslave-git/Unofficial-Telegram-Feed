@@ -112,6 +112,7 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
     protected boolean occupyStatusBar = true;
     protected boolean actionModeVisible;
     private boolean addToContainer = true;
+    private org.unofficial.telegramfeed.ui.PauseBanner tgfeedPauseBanner; // TGFEED: under the bar while the rules are paused
     private boolean clipContent;
     private boolean interceptTouches = true;
     private boolean forceSkipTouches;
@@ -1397,7 +1398,12 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
         }
         ignoreLayoutRequest = false;
 
-        setMeasuredDimension(width, actionBarHeight + (occupyStatusBar ? AndroidUtilities.statusBarHeight : 0) + extraHeight);
+        int tgfeedBannerHeight = 0; // TGFEED
+        if (tgfeedPauseBanner != null && tgfeedPauseBanner.getVisibility() != GONE) { // TGFEED
+            tgfeedPauseBanner.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.UNSPECIFIED)); // TGFEED
+            tgfeedBannerHeight = tgfeedPauseBanner.getMeasuredHeight(); // TGFEED
+        } // TGFEED
+        setMeasuredDimension(width, actionBarHeight + (occupyStatusBar ? AndroidUtilities.statusBarHeight : 0) + extraHeight + tgfeedBannerHeight); // TGFEED: plus the banner
 
         int textLeft;
         if (backButtonImageView != null && backButtonImageView.getVisibility() != GONE) {
@@ -1496,10 +1502,10 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
         int childCount = getChildCount();
         for (int i = 0; i < childCount; i++) {
             View child = getChildAt(i);
-            if (child.getVisibility() == GONE || child == titleTextView[0] || child == titleTextView[1] || child == additionalSubTitleOverlayContainer || child == subtitleTextView || child == menu || child == backButtonImageView || child == additionalSubtitleTextView || child == avatarSearchImageView) {
+            if (child.getVisibility() == GONE || child == titleTextView[0] || child == titleTextView[1] || child == additionalSubTitleOverlayContainer || child == subtitleTextView || child == menu || child == backButtonImageView || child == additionalSubtitleTextView || child == avatarSearchImageView || child == tgfeedPauseBanner /* TGFEED */) {
                 continue;
             }
-            measureChildWithMargins(child, widthMeasureSpec, 0, MeasureSpec.makeMeasureSpec(getMeasuredHeight(), MeasureSpec.EXACTLY), 0);
+            measureChildWithMargins(child, widthMeasureSpec, 0, MeasureSpec.makeMeasureSpec(getMeasuredHeight() - tgfeedBannerHeight /* TGFEED */, MeasureSpec.EXACTLY), 0);
         }
     }
 
@@ -1569,10 +1575,14 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
             );
         }
 
+        if (tgfeedPauseBanner != null && tgfeedPauseBanner.getVisibility() != GONE) { // TGFEED: the banner at the bottom
+            tgfeedPauseBanner.layout(0, getMeasuredHeight() - tgfeedPauseBanner.getMeasuredHeight(), getMeasuredWidth(), getMeasuredHeight()); // TGFEED
+            bottom -= tgfeedPauseBanner.getMeasuredHeight(); // TGFEED: the other children keep the bar's own height
+        } // TGFEED
         int childCount = getChildCount();
         for (int i = 0; i < childCount; i++) {
             View child = getChildAt(i);
-            if (child.getVisibility() == GONE || child == titleTextView[0] || child == titleTextView[1] || child == additionalSubTitleOverlayContainer || child == subtitleTextView || child == menu || child == backButtonImageView || child == additionalSubtitleTextView || child == avatarSearchImageView) {
+            if (child.getVisibility() == GONE || child == titleTextView[0] || child == titleTextView[1] || child == additionalSubTitleOverlayContainer || child == subtitleTextView || child == menu || child == backButtonImageView || child == additionalSubtitleTextView || child == avatarSearchImageView || child == tgfeedPauseBanner /* TGFEED */) {
                 continue;
             }
 
@@ -1992,6 +2002,10 @@ public class ActionBar extends FrameLayout implements FactorAnimator.Target, The
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         attached = true;
+        if (tgfeedPauseBanner == null && getParent() instanceof ActionBarLayout.LayoutContainer) { // TGFEED: only where the container lays the screen out below the bar
+            tgfeedPauseBanner = new org.unofficial.telegramfeed.ui.PauseBanner(getContext(), null, true); // TGFEED
+            addView(tgfeedPauseBanner, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)); // TGFEED
+        } // TGFEED
         updateAttachState();
         if (actionModeVisible) {
             final int color = actionModeColor == 0 ? actionBarColor : actionModeColor;

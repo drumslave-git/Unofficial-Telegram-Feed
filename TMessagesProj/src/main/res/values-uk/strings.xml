@@ -194,6 +194,12 @@
     <string name="TgfeedUrgentSound">Термінові правила: звук</string>
     <string name="TgfeedUrgentVibrate">Термінові правила: вібрація</string>
     <string name="TgfeedRuleSoundsInfo">Тихі правила не видають звуку. Зміна діє одразу й скидає налаштування Android для цих сповіщень, зокрема режим «Не турбувати».</string>
+    <string name="TgfeedChannelMutedNote">Сповіщення вимкнено в Telegram: правила цього каналу сповіщають лише тоді, коли застосунок відкрито.</string>
+    <string name="TgfeedUnmuteTitle">Увімкнути сповіщення каналу «%1$s»?</string>
+    <string name="TgfeedUnmuteText">Telegram надсилає на телефон дописи каналу, лише коли його сповіщення не вимкнено. Якщо їх увімкнути, правило сповіщатиме й тоді, коли застосунок закрито, а канал сповіщатиме лише про дописи, що відповідають його правилам. Якщо ні, правило сповіщає лише тоді, коли застосунок відкрито.</string>
+    <string name="TgfeedUnmute">Увімкнути</string>
+    <string name="TgfeedKeepMuted">Залишити вимкненим</string>
+    <string name="TgfeedBatteryBanner">Поки телефон спить, Android може затримувати те, що застосунок робить після push, а деякі телефони присипляють застосунок: тоді правила сповіщатимуть пізно або не сповіщатимуть зовсім. Дозвольте застосунку ігнорувати оптимізацію батареї, щоб вони працювали далі.</string>
     <string name="AppNameBeta">Telegram Beta</string>
     <string name="LanguageName">Українська</string>
     <string name="English">Англійська</string>

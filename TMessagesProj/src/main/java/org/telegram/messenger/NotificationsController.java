@@ -1403,14 +1403,20 @@ public class NotificationsController extends BaseController implements Notificat
 
     // TGFEED: whether a message of the dialog waiting in the tray notified through a rule
     private boolean tgfeedRuleNotified(long dialogId) {
+        return tgfeedRuleNotifiedCount(dialogId) > 0;
+    }
+
+    // TGFEED: how many posts of a channel are in the tray through a rule; a channel whose rules decide counts only those
+    private int tgfeedRuleNotifiedCount(long dialogId) {
         org.unofficial.telegramfeed.feeds.RuleNotifications rules = org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount);
+        int count = 0;
         for (int i = 0; i < pushMessages.size(); i++) {
             MessageObject message = pushMessages.get(i);
             if (message.getDialogId() == dialogId && rules.get(dialogId, message.getId()) != null) {
-                return true;
+                count++;
             }
         }
-        return false;
+        return count;
     }
 
     public void processDialogsUpdateRead(LongSparseIntArray dialogsToUpdate) {
@@ -1447,6 +1453,9 @@ public class NotificationsController extends BaseController implements Notificat
                 }
                 if (org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).governs(dialogId)) { // TGFEED: counted when a rule notified
                     canAddValue = tgfeedRuleNotified(dialogId);
+                    if (newCount > 0) { // TGFEED: and only as many as the rules notified
+                        newCount = Math.min(newCount, tgfeedRuleNotifiedCount(dialogId)); // TGFEED
+                    } // TGFEED
                 }
 
                 if (notifyCheck && !canAddValue) {
@@ -1637,13 +1646,17 @@ public class NotificationsController extends BaseController implements Notificat
 
                     settingsCache.put(dialog_id, value);
                 }
-                if (org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).governs(dialog_id)) { // TGFEED: counted when a rule notified
+                boolean tgfeedGoverned = org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).governs(dialog_id); // TGFEED
+                if (tgfeedGoverned) { // TGFEED: counted when a rule notified
                     value = pushMessagesDict.get(dialog_id) != null;
                 }
                 if (!value) {
                     continue;
                 }
                 int count = dialogs.valueAt(a);
+                if (tgfeedGoverned) { // TGFEED: only as many as the rules notified
+                    count = Math.min(count, tgfeedRuleNotifiedCount(dialog_id)); // TGFEED
+                } // TGFEED
                 pushDialogs.put(dialog_id, count);
                 if (getMessagesController().isCommunity(dialog_id)) {
 

@@ -184,6 +184,12 @@
     <string name="TgfeedUrgentSound">Urgent rules: sound</string>
     <string name="TgfeedUrgentVibrate">Urgent rules: vibration</string>
     <string name="TgfeedRuleSoundsInfo">Silent rules make no sound. A change applies at once and resets what Android was told for these notifications, Do Not Disturb included.</string>
+    <string name="TgfeedChannelMutedNote">Muted in Telegram: the rules of this channel notify only while the app is open.</string>
+    <string name="TgfeedUnmuteTitle">Unmute %1$s?</string>
+    <string name="TgfeedUnmuteText">Telegram sends a channel\'s posts to the phone only while the channel is not muted. Unmuted, the rule notifies also while the app is closed, and the channel notifies only for the posts its rules match. Muted, the rule notifies only while the app is open.</string>
+    <string name="TgfeedUnmute">Unmute</string>
+    <string name="TgfeedKeepMuted">Keep muted</string>
+    <string name="TgfeedBatteryBanner">While the phone sleeps, Android may hold back what the app does for a push, and some phones put the app to sleep: rules would then notify late or not at all. Allow the app to ignore battery optimisation so they keep working.</string>
     <string name="AppNameBeta">Telegram Beta</string>
     <string name="LanguageName">English</string>
     <string name="English">English</string>

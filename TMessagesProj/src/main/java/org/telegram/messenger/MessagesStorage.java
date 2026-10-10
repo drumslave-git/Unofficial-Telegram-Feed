@@ -3810,7 +3810,8 @@ public class MessagesStorage extends BaseController {
                     long flags = cursor.longValue(2);
                     boolean muted = (flags & 1) != 0;
                     int mutedUntil = (int) (flags >> 32);
-                    if (cursor.isNull(2) || !muted || mutedUntil != 0 && mutedUntil < currentTime) {
+                    if (cursor.isNull(2) || !muted || mutedUntil != 0 && mutedUntil < currentTime
+                            || org.unofficial.telegramfeed.feeds.RuleNotifications.getInstance(currentAccount).governs(cursor.longValue(0))) { // TGFEED: a muted channel whose rules notify keeps its rule notifications
                         long did = cursor.longValue(0);
                         if (DialogObject.isFolderDialogId(did)) {
                             continue;

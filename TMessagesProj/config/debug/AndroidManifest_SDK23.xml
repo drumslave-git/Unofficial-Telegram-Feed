@@ -67,6 +67,8 @@
             android:enabled="false"
             android:exported="false" />
 
+        <!-- TGFEED: debug builds only; hands a made-up channel push to Telegram's push code, sendable by the shell alone (DUMP) -->
+        <receiver android:name="org.unofficial.telegramfeed.debug.DebugPushReceiver" android:exported="true" android:permission="android.permission.DUMP" /> <!-- TGFEED -->
     </application>
 
 </manifest>

@@ -218,7 +218,11 @@ public class RuleEditActivity extends BaseFragment {
         rows.add(new Row(T_HEADER, 0, 0, LocaleController.getString(R.string.TgfeedRuleWatches)));
         rows.add(new Row(T_CHANNEL, 0, 0, null));
         rows.add(new Row(T_FEED, 0, 0, null));
-        rows.add(new Row(T_INFO, 0, 0, LocaleController.getString(R.string.TgfeedRuleFeedInfo)));
+        String watchesInfo = LocaleController.getString(R.string.TgfeedRuleFeedInfo);
+        if (draft.channelId != 0 && getMessagesController().isDialogMuted(-draft.channelId, 0)) {
+            watchesInfo = LocaleController.getString(R.string.TgfeedChannelMutedNote) + "\n\n" + watchesInfo;
+        }
+        rows.add(new Row(T_INFO, 0, 0, watchesInfo));
 
         rows.add(new Row(T_HEADER, 0, 0, LocaleController.getString(R.string.TgfeedRuleCondition)));
         rows.add(new Row(T_MODE, 0, 0, null));
@@ -713,10 +717,17 @@ public class RuleEditActivity extends BaseFragment {
             controller().updateRule(new Rule(draft));
         }
         original = new Rule(draft);
+        Runnable afterPermission = () -> {
+            if (draft.enabled && getMessagesController().isDialogMuted(-draft.channelId, 0)) {
+                offerUnmute();
+            } else {
+                finishFragment();
+            }
+        };
         if (first && needsNotificationPermission()) {
-            askNotificationPermission();
+            askNotificationPermission(afterPermission);
         } else {
-            finishFragment();
+            afterPermission.run();
         }
     }
 
@@ -725,17 +736,32 @@ public class RuleEditActivity extends BaseFragment {
         return Build.VERSION.SDK_INT >= 33 && activity != null && activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED;
     }
 
-    private void askNotificationPermission() {
+    /** Telegram pushes only unmuted channels: offers to unmute the rule's channel. */
+    private void offerUnmute() {
+        AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity(), getResourceProvider());
+        b.setTitle(LocaleController.formatString(R.string.TgfeedUnmuteTitle, channelTitle(draft.channelId)));
+        b.setMessage(LocaleController.getString(R.string.TgfeedUnmuteText));
+        b.setNegativeButton(LocaleController.getString(R.string.TgfeedKeepMuted), (d, w) -> finishFragment());
+        b.setPositiveButton(LocaleController.getString(R.string.TgfeedUnmute), (d, w) -> {
+            getNotificationsController().muteDialog(-draft.channelId, 0, false);
+            finishFragment();
+        });
+        AlertDialog dialog = b.create();
+        dialog.setCanceledOnTouchOutside(false);
+        showDialog(dialog);
+    }
+
+    private void askNotificationPermission(Runnable then) {
         AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity(), getResourceProvider());
         b.setTitle(LocaleController.getString(R.string.TgfeedNotifyAskTitle));
         b.setMessage(LocaleController.getString(R.string.TgfeedNotifyAskText));
-        b.setNegativeButton(LocaleController.getString(R.string.TgfeedNotNow), (d, w) -> finishFragment());
+        b.setNegativeButton(LocaleController.getString(R.string.TgfeedNotNow), (d, w) -> then.run());
         b.setPositiveButton(LocaleController.getString(R.string.TgfeedAllow), (d, w) -> {
             Activity activity = getParentActivity();
             if (activity != null && Build.VERSION.SDK_INT >= 33) {
                 activity.requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
             }
-            finishFragment();
+            then.run();
         });
         AlertDialog dialog = b.create();
         dialog.setCanceledOnTouchOutside(false);

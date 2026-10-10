@@ -4,17 +4,25 @@ import static org.telegram.messenger.AndroidUtilities.dp;
 
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -51,6 +59,7 @@ public class RulesActivity extends BaseFragment implements NotificationCenter.No
     private static final int ROW_RULE = 2;
     private static final int ROW_SHADOW = 3;
     private static final int ROW_EMPTY = 4;
+    private static final int ROW_BATTERY = 5;
 
     private final long channelId;
     private final long feedId;
@@ -158,7 +167,9 @@ public class RulesActivity extends BaseFragment implements NotificationCenter.No
                 return;
             }
             Row row = rows.get(position);
-            if (row.type == ROW_NEW) {
+            if (row.type == ROW_BATTERY) {
+                requestBatteryExemption();
+            } else if (row.type == ROW_NEW) {
                 presentFragment(new RuleEditActivity(0, channelId, feedId));
             } else if (row.type == ROW_RULE) {
                 boolean onSwitch = LocaleController.isRTL && x <= dp(76) || !LocaleController.isRTL && x >= view.getMeasuredWidth() - dp(76);
@@ -213,8 +224,36 @@ public class RulesActivity extends BaseFragment implements NotificationCenter.No
         return controller().getRules();
     }
 
+    /** Whether Android may hold the app back while the phone sleeps. */
+    private boolean batteryOptimized() {
+        if (Build.VERSION.SDK_INT < 23 || getParentActivity() == null) {
+            return false;
+        }
+        PowerManager power = (PowerManager) getParentActivity().getSystemService(Context.POWER_SERVICE);
+        return power != null && !power.isIgnoringBatteryOptimizations(getParentActivity().getPackageName());
+    }
+
+    private void requestBatteryExemption() {
+        try {
+            Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getParentActivity().getPackageName()));
+            getParentActivity().startActivity(intent);
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        updateRows();
+    }
+
     private void updateRows() {
         rows.clear();
+        if (!shownRules().isEmpty() && batteryOptimized()) {
+            rows.add(new Row(ROW_BATTERY, 0, null, false));
+            rows.add(new Row(ROW_SHADOW, 0, null, false));
+        }
         rows.add(new Row(ROW_NEW, 0, null, false));
         LinkedHashMap<Long, List<Rule>> byChannel = new LinkedHashMap<>();
         for (Rule rule : shownRules()) {
@@ -294,7 +333,7 @@ public class RulesActivity extends BaseFragment implements NotificationCenter.No
         @Override
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
             int type = holder.getItemViewType();
-            return type == ROW_NEW || type == ROW_RULE;
+            return type == ROW_NEW || type == ROW_RULE || type == ROW_BATTERY;
         }
 
         @NonNull
@@ -332,6 +371,25 @@ public class RulesActivity extends BaseFragment implements NotificationCenter.No
                     text.setPadding(dp(24), dp(20), dp(24), dp(24));
                     text.setText(LocaleController.getString(R.string.TgfeedRulesEmpty));
                     view = text;
+                    break;
+                }
+                case ROW_BATTERY: {
+                    LinearLayout box = new LinearLayout(context);
+                    box.setOrientation(LinearLayout.VERTICAL);
+                    box.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+                    box.setPadding(dp(21), dp(14), dp(21), dp(10));
+                    TextView text = new TextView(context);
+                    text.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+                    text.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+                    text.setText(LocaleController.getString(R.string.TgfeedBatteryBanner));
+                    box.addView(text, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
+                    TextView allow = new TextView(context);
+                    allow.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+                    allow.setTypeface(AndroidUtilities.bold());
+                    allow.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
+                    allow.setText(LocaleController.getString(R.string.TgfeedAllow));
+                    box.addView(allow, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, LocaleController.isRTL ? Gravity.LEFT : Gravity.RIGHT, 0, 8, 0, 0));
+                    view = box;
                     break;
                 }
                 case ROW_SHADOW:

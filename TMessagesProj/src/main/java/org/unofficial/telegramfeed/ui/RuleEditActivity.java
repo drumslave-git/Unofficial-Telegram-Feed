@@ -6,10 +6,8 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.TimePickerDialog;
 import android.content.Context;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
-import android.provider.Settings;
 import android.text.format.DateFormat;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -51,7 +49,6 @@ import org.unofficial.telegramfeed.core.RuleParser;
 import org.unofficial.telegramfeed.core.Schedule;
 import org.unofficial.telegramfeed.feeds.FeedsController;
 import org.unofficial.telegramfeed.feeds.PostFilter;
-import org.unofficial.telegramfeed.feeds.RuleNotifications;
 import org.unofficial.telegramfeed.feeds.RulesController;
 
 import java.text.DateFormatSymbols;
@@ -346,7 +343,7 @@ public class RuleEditActivity extends BaseFragment {
                     draft.priority = row.group;
                     updateRows();
                     if (row.group == Rule.PRIORITY_URGENT) {
-                        offerDoNotDisturb();
+                        TgfeedAlerts.offerDoNotDisturb(this);
                     }
                 }
                 break;
@@ -540,28 +537,6 @@ public class RuleEditActivity extends BaseFragment {
             updateRows();
         }, minutes / 60, minutes % 60, DateFormat.is24HourFormat(getParentActivity()));
         showDialog(dialog);
-    }
-
-    private void offerDoNotDisturb() {
-        if (Build.VERSION.SDK_INT < 26) {
-            return;
-        }
-        AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity(), getResourceProvider());
-        b.setTitle(LocaleController.getString(R.string.TgfeedDndTitle));
-        b.setMessage(LocaleController.getString(R.string.TgfeedDndText));
-        b.setNegativeButton(LocaleController.getString(R.string.TgfeedLater), null);
-        b.setPositiveButton(LocaleController.getString(R.string.TgfeedOpenSettings), (d, w) -> {
-            try {
-                String channel = RuleNotifications.getInstance(currentAccount).channelFor(Rule.PRIORITY_URGENT);
-                Intent intent = new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
-                intent.putExtra(Settings.EXTRA_APP_PACKAGE, getParentActivity().getPackageName());
-                intent.putExtra(Settings.EXTRA_CHANNEL_ID, channel);
-                getParentActivity().startActivity(intent);
-            } catch (Exception e) {
-                FileLog.e(e);
-            }
-        });
-        showDialog(b.create());
     }
 
     // ---------------------------------------------------------------- dry run

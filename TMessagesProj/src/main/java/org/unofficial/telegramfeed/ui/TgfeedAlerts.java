@@ -376,4 +376,29 @@ public final class TgfeedAlerts {
         builder.setPositiveButton(LocaleController.getString(R.string.OK), null);
         fragment.showDialog(builder.create());
     }
+
+    /**
+     * Offers Android's settings of the urgent rule notifications, where "Override Do Not Disturb"
+     * lets them through Do Not Disturb.
+     */
+    public static void offerDoNotDisturb(BaseFragment fragment) {
+        if (android.os.Build.VERSION.SDK_INT < 26 || fragment.getParentActivity() == null) {
+            return;
+        }
+        AlertDialog.Builder b = new AlertDialog.Builder(fragment.getParentActivity(), fragment.getResourceProvider());
+        b.setTitle(LocaleController.getString(R.string.TgfeedDndTitle));
+        b.setMessage(LocaleController.getString(R.string.TgfeedDndText));
+        b.setNegativeButton(LocaleController.getString(R.string.TgfeedLater), null);
+        b.setPositiveButton(LocaleController.getString(R.string.TgfeedOpenSettings), (d, w) -> {
+            try {
+                android.content.Intent intent = new android.content.Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
+                intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, fragment.getParentActivity().getPackageName());
+                intent.putExtra(android.provider.Settings.EXTRA_CHANNEL_ID, org.unofficial.telegramfeed.feeds.RuleSounds.channelFor(org.unofficial.telegramfeed.core.Rule.PRIORITY_URGENT));
+                fragment.getParentActivity().startActivity(intent);
+            } catch (Exception e) {
+                org.telegram.messenger.FileLog.e(e);
+            }
+        });
+        fragment.showDialog(b.create());
+    }
 }

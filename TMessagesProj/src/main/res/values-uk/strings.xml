@@ -189,6 +189,11 @@
     <string name="TgfeedResume">Відновити</string>
     <string name="TgfeedPauseNotifications">Призупинити сповіщення</string>
     <string name="TgfeedResumeNotifications">Відновити сповіщення</string>
+    <string name="TgfeedNormalSound">Звичайні правила: звук</string>
+    <string name="TgfeedNormalVibrate">Звичайні правила: вібрація</string>
+    <string name="TgfeedUrgentSound">Термінові правила: звук</string>
+    <string name="TgfeedUrgentVibrate">Термінові правила: вібрація</string>
+    <string name="TgfeedRuleSoundsInfo">Тихі правила не видають звуку. Зміна діє одразу й скидає налаштування Android для цих сповіщень, зокрема режим «Не турбувати».</string>
     <string name="AppNameBeta">Telegram Beta</string>
     <string name="LanguageName">Українська</string>
     <string name="English">Англійська</string>

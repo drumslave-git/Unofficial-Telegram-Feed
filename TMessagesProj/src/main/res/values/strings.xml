@@ -179,6 +179,11 @@
     <string name="TgfeedResume">Resume</string>
     <string name="TgfeedPauseNotifications">Pause notifications</string>
     <string name="TgfeedResumeNotifications">Resume notifications</string>
+    <string name="TgfeedNormalSound">Normal rules: sound</string>
+    <string name="TgfeedNormalVibrate">Normal rules: vibration</string>
+    <string name="TgfeedUrgentSound">Urgent rules: sound</string>
+    <string name="TgfeedUrgentVibrate">Urgent rules: vibration</string>
+    <string name="TgfeedRuleSoundsInfo">Silent rules make no sound. A change applies at once and resets what Android was told for these notifications, Do Not Disturb included.</string>
     <string name="AppNameBeta">Telegram Beta</string>
     <string name="LanguageName">English</string>
     <string name="English">English</string>

@@ -148,6 +148,12 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
     @Keep
     private int badgeNumberMessagesRow;
     private int tgfeedCountPostsRow; // TGFEED
+    private int tgfeedRulesSectionRow; // TGFEED: the sound and vibration of rule notifications
+    private int tgfeedNormalSoundRow; // TGFEED
+    private int tgfeedNormalVibrateRow; // TGFEED
+    private int tgfeedUrgentSoundRow; // TGFEED
+    private int tgfeedUrgentVibrateRow; // TGFEED
+    private int tgfeedRulesInfoRow; // TGFEED
     private int badgeNumberSection2Row;
     private int androidAutoAlertRow;
     private int repeatRow;
@@ -184,6 +190,13 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
         storiesRow = rowCount++;
         reactionsRow = rowCount++;
         notificationsSection2Row = rowCount++;
+
+        tgfeedRulesSectionRow = rowCount++; // TGFEED
+        tgfeedNormalSoundRow = rowCount++; // TGFEED
+        tgfeedNormalVibrateRow = rowCount++; // TGFEED
+        tgfeedUrgentSoundRow = rowCount++; // TGFEED
+        tgfeedUrgentVibrateRow = rowCount++; // TGFEED
+        tgfeedRulesInfoRow = rowCount++; // TGFEED
 
         callsSectionRow = rowCount++;
         callsVibrateRow = rowCount++;
@@ -578,6 +591,27 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                 } else {
                     presentFragment(new NotificationsCustomSettingsActivity(type, exceptions, autoExceptions));
                 }
+            } else if (position == tgfeedNormalSoundRow || position == tgfeedUrgentSoundRow) { // TGFEED
+                try { // TGFEED
+                    int tgfeedPriority = position == tgfeedNormalSoundRow ? org.unofficial.telegramfeed.core.Rule.PRIORITY_NORMAL : org.unofficial.telegramfeed.core.Rule.PRIORITY_URGENT; // TGFEED
+                    Intent tmpIntent = new Intent(RingtoneManager.ACTION_RINGTONE_PICKER); // TGFEED
+                    tmpIntent.putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION); // TGFEED
+                    tmpIntent.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true); // TGFEED
+                    tmpIntent.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true); // TGFEED
+                    tmpIntent.putExtra(RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI, Settings.System.DEFAULT_NOTIFICATION_URI); // TGFEED
+                    tmpIntent.putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, org.unofficial.telegramfeed.feeds.RuleSounds.getSound(tgfeedPriority)); // TGFEED
+                    startActivityForResult(tmpIntent, position); // TGFEED
+                } catch (Exception e) { // TGFEED
+                    FileLog.e(e); // TGFEED
+                } // TGFEED
+            } else if (position == tgfeedNormalVibrateRow || position == tgfeedUrgentVibrateRow) { // TGFEED
+                int tgfeedPriority = position == tgfeedNormalVibrateRow ? org.unofficial.telegramfeed.core.Rule.PRIORITY_NORMAL : org.unofficial.telegramfeed.core.Rule.PRIORITY_URGENT; // TGFEED
+                org.unofficial.telegramfeed.ui.TgfeedAlerts.choose(this, getString(R.string.Vibrate), org.unofficial.telegramfeed.feeds.RuleSounds.vibrateLabels(), org.unofficial.telegramfeed.feeds.RuleSounds.getVibrate(tgfeedPriority), value -> { // TGFEED
+                    if (org.unofficial.telegramfeed.feeds.RuleSounds.setVibrate(tgfeedPriority, value)) { // TGFEED: the new channel lost the Do Not Disturb override
+                        org.unofficial.telegramfeed.ui.TgfeedAlerts.offerDoNotDisturb(this); // TGFEED
+                    } // TGFEED
+                    adapter.notifyItemChanged(position); // TGFEED
+                }); // TGFEED
             } else if (position == callsRingtoneRow) {
                 try {
                     SharedPreferences preferences = MessagesController.getNotificationsSettings(currentAccount);
@@ -823,6 +857,14 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
 
     @Override
     public void onActivityResultFragment(int requestCode, int resultCode, Intent data) {
+        if (resultCode == Activity.RESULT_OK && (requestCode == tgfeedNormalSoundRow || requestCode == tgfeedUrgentSoundRow)) { // TGFEED: a rule sound
+            int tgfeedPriority = requestCode == tgfeedNormalSoundRow ? org.unofficial.telegramfeed.core.Rule.PRIORITY_NORMAL : org.unofficial.telegramfeed.core.Rule.PRIORITY_URGENT; // TGFEED
+            if (org.unofficial.telegramfeed.feeds.RuleSounds.setSound(tgfeedPriority, data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI))) { // TGFEED
+                org.unofficial.telegramfeed.ui.TgfeedAlerts.offerDoNotDisturb(this); // TGFEED
+            } // TGFEED
+            adapter.notifyItemChanged(requestCode); // TGFEED
+            return; // TGFEED
+        } // TGFEED
         if (resultCode == Activity.RESULT_OK) {
             Uri ringtone = data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
             String name = null;
@@ -944,6 +986,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                     position == badgeNumberSection || position == otherSection2Row || position == resetSection2Row ||
                     position == callsSection2Row || position == callsSectionRow || position == badgeNumberSection2Row ||
                     position == accountsSectionRow || position == accountsInfoRow || position == resetNotificationsSectionRow ||
+                    position == tgfeedRulesSectionRow || position == tgfeedRulesInfoRow || // TGFEED
                     position == eventsSection2Row);
         }
 
@@ -1003,6 +1046,8 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                         headerCell.setText(getString("BadgeNumber", R.string.BadgeNumber));
                     } else if (position == accountsSectionRow) {
                         headerCell.setText(getString("ShowNotificationsFor", R.string.ShowNotificationsFor));
+                    } else if (position == tgfeedRulesSectionRow) { // TGFEED
+                        headerCell.setText(getString(R.string.TgfeedRules)); // TGFEED
                     }
                     break;
                 }
@@ -1155,7 +1200,13 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                 case 5: {
                     TextSettingsCell textCell = (TextSettingsCell) holder.itemView;
                     SharedPreferences preferences = MessagesController.getNotificationsSettings(currentAccount);
-                    if (position == callsRingtoneRow) {
+                    if (position == tgfeedNormalSoundRow || position == tgfeedUrgentSoundRow) { // TGFEED
+                        int tgfeedPriority = position == tgfeedNormalSoundRow ? org.unofficial.telegramfeed.core.Rule.PRIORITY_NORMAL : org.unofficial.telegramfeed.core.Rule.PRIORITY_URGENT; // TGFEED
+                        textCell.setTextAndValue(getString(position == tgfeedNormalSoundRow ? R.string.TgfeedNormalSound : R.string.TgfeedUrgentSound), org.unofficial.telegramfeed.feeds.RuleSounds.soundLabel(mContext, tgfeedPriority), true); // TGFEED
+                    } else if (position == tgfeedNormalVibrateRow || position == tgfeedUrgentVibrateRow) { // TGFEED
+                        int tgfeedPriority = position == tgfeedNormalVibrateRow ? org.unofficial.telegramfeed.core.Rule.PRIORITY_NORMAL : org.unofficial.telegramfeed.core.Rule.PRIORITY_URGENT; // TGFEED
+                        textCell.setTextAndValue(getString(position == tgfeedNormalVibrateRow ? R.string.TgfeedNormalVibrate : R.string.TgfeedUrgentVibrate), org.unofficial.telegramfeed.feeds.RuleSounds.vibrateLabel(org.unofficial.telegramfeed.feeds.RuleSounds.getVibrate(tgfeedPriority)), position == tgfeedNormalVibrateRow); // TGFEED
+                    } else if (position == callsRingtoneRow) {
                         String value = preferences.getString("CallsRingtone", getString("DefaultRingtone", R.string.DefaultRingtone));
                         if (value.equals("NoSound")) {
                             value = getString("NoSound", R.string.NoSound);
@@ -1195,6 +1246,8 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                     TextInfoPrivacyCell textCell = (TextInfoPrivacyCell) holder.itemView;
                     if (position == accountsInfoRow) {
                         textCell.setText(getString("ShowNotificationsForInfo", R.string.ShowNotificationsForInfo));
+                    } else if (position == tgfeedRulesInfoRow) { // TGFEED
+                        textCell.setText(getString(R.string.TgfeedRuleSoundsInfo)); // TGFEED
                     }
                     break;
                 }
@@ -1205,7 +1258,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
         public int getItemViewType(int position) {
             if (position == eventsSectionRow || position == otherSectionRow || position == resetSectionRow ||
                     position == callsSectionRow || position == badgeNumberSection || position == inappSectionRow ||
-                    position == notificationsSectionRow || position == accountsSectionRow) {
+                    position == notificationsSectionRow || position == accountsSectionRow || position == tgfeedRulesSectionRow /* TGFEED */) {
                 return 0;
             } else if (position == inappSoundRow || position == inappVibrateRow || position == notificationsServiceConnectionRow ||
                     position == inappPreviewRow || position == contactJoinedRow || position == pinnedMessageRow ||
@@ -1222,7 +1275,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                     position == resetSection2Row || position == callsSection2Row || position == badgeNumberSection2Row ||
                     position == resetNotificationsSectionRow) {
                 return 4;
-            } else if (position == accountsInfoRow) {
+            } else if (position == accountsInfoRow || position == tgfeedRulesInfoRow /* TGFEED */) {
                 return 6;
             } else {
                 return 5;

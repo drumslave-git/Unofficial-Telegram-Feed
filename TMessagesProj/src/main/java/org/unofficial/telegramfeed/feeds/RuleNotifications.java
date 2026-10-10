@@ -1,13 +1,7 @@
 package org.unofficial.telegramfeed.feeds;
 
 import android.app.Activity;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.content.Context;
 import android.content.SharedPreferences;
-import android.media.AudioAttributes;
-import android.os.Build;
-import android.provider.Settings;
 
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildVars;
@@ -54,11 +48,6 @@ public class RuleNotifications {
     private static final long FETCH_WAIT_MS = 8000;
     private static final int REMEMBERED = 300;
 
-    public static final String CHANNEL_SILENT = "tgfeed_rules_silent";
-    public static final String CHANNEL_NORMAL = "tgfeed_rules_normal";
-    public static final String CHANNEL_URGENT = "tgfeed_rules_urgent";
-    private static final String CHANNEL_GROUP = "tgfeed_rules";
-
     /** What a match left for the notification. */
     public static final class Notified {
         public final int priority;
@@ -101,7 +90,6 @@ public class RuleNotifications {
     private final LinkedHashMap<String, Notified> notified = new LinkedHashMap<>();
     private final LinkedHashMap<String, Boolean> matchedAlbums = new LinkedHashMap<>();
     private boolean restored;
-    private boolean channelsCreated;
 
     private RuleNotifications(int account) {
         currentAccount = account;
@@ -261,52 +249,6 @@ public class RuleNotifications {
 
     /** The notification channel of a priority, created on first use. */
     public String channelFor(int priority) {
-        createChannels();
-        switch (priority) {
-            case Rule.PRIORITY_SILENT:
-                return CHANNEL_SILENT;
-            case Rule.PRIORITY_URGENT:
-                return CHANNEL_URGENT;
-            default:
-                return CHANNEL_NORMAL;
-        }
-    }
-
-    private synchronized void createChannels() {
-        if (channelsCreated || Build.VERSION.SDK_INT < 26) {
-            channelsCreated = true;
-            return;
-        }
-        channelsCreated = true;
-        try {
-            NotificationManager manager = (NotificationManager) ApplicationLoader.applicationContext.getSystemService(Context.NOTIFICATION_SERVICE);
-            manager.createNotificationChannelGroup(new android.app.NotificationChannelGroup(CHANNEL_GROUP, LocaleController.getString(R.string.TgfeedRuleChannels)));
-            AudioAttributes audio = new AudioAttributes.Builder()
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                    .build();
-
-            NotificationChannel silent = new NotificationChannel(CHANNEL_SILENT, LocaleController.getString(R.string.TgfeedRuleChannelSilent), NotificationManager.IMPORTANCE_LOW);
-            silent.setGroup(CHANNEL_GROUP);
-            silent.setSound(null, null);
-            silent.enableVibration(false);
-            manager.createNotificationChannel(silent);
-
-            NotificationChannel normal = new NotificationChannel(CHANNEL_NORMAL, LocaleController.getString(R.string.TgfeedRuleChannelNormal), NotificationManager.IMPORTANCE_HIGH);
-            normal.setGroup(CHANNEL_GROUP);
-            normal.setSound(Settings.System.DEFAULT_NOTIFICATION_URI, audio);
-            normal.enableVibration(true);
-            manager.createNotificationChannel(normal);
-
-            NotificationChannel urgent = new NotificationChannel(CHANNEL_URGENT, LocaleController.getString(R.string.TgfeedRuleChannelUrgent), NotificationManager.IMPORTANCE_HIGH);
-            urgent.setGroup(CHANNEL_GROUP);
-            urgent.setSound(Settings.System.DEFAULT_NOTIFICATION_URI, audio);
-            urgent.enableVibration(true);
-            urgent.setVibrationPattern(new long[]{0, 400, 200, 400, 200, 400});
-            urgent.setBypassDnd(true);
-            manager.createNotificationChannel(urgent);
-        } catch (Exception e) {
-            FileLog.e(e);
-        }
+        return RuleSounds.channelFor(priority);
     }
 }

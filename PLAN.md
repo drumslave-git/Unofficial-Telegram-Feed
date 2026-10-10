@@ -4,13 +4,12 @@ Open work only. A task leaves this file in the commit that finishes it; `git log
 
 Legend: `[ ]` not started, `[~]` in progress (name the branch).
 
-**Current phase:** P3 — Rules and notifications. **Next task:** P3-5.
+**Current phase:** P3 — Rules and notifications. **Next task:** P3-6.
 
 The fork of the official Telegram Android client (DrKLO/Telegram, 12.10.6) that takes over three features of the Flutter app `telegram-feed`: feeds that group channels into one timeline, keyword rules per channel that decide which posts notify and are read aloud, and a switch that hides stories. Everything else stays as the official app has it. Each phase from P1 on ends with a tagged release.
 
 ## P3 — Rules and notifications
 
-- [ ] P3-5 Sounds. Notifications and Sounds gets a "Rules" block: sound and vibration for normal and for urgent rule notifications, applied at once.
 - [ ] P3-6 Push while the app is closed. Telegram pushes only unmuted channels, so a channel with rules must be unmuted in Telegram: saving a rule for a muted channel offers to unmute it and otherwise says the rule notifies only while the app is open. The battery-optimisation request on the rules screens. Verified on the emulator with the debug push broadcast and with a real post on the spare account.
 - [ ] P3-7 Missed posts. Posts that came while the phone was off or offline are matched when the app connects again, unless already read; rules match only posts newer than their creation.
 - [ ] P3-8 Hands-on pass; release 0.3.0.

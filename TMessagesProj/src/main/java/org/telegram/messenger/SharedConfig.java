@@ -157,6 +157,15 @@ public class SharedConfig {
                 .apply();
     }
 
+    // TGFEED: the "Count unread posts" switch, device-wide.
+    public static void toggleTgfeedCountPosts() {
+        tgfeedCountPosts = !tgfeedCountPosts;
+        ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
+                .edit()
+                .putBoolean("tgfeedCountPosts", tgfeedCountPosts)
+                .apply();
+    }
+
     public static void toggleSurfaceInStories() {
         useSurfaceInStories = !useSurfaceInStories;
         ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE)
@@ -272,6 +281,7 @@ public class SharedConfig {
     public static boolean updateStickersOrderOnSend = true;
     public static boolean bigCameraForRound;
     public static boolean tgfeedHideStories; // TGFEED
+    public static boolean tgfeedCountPosts = true; // TGFEED: feeds count unread posts, or channels with new posts
     public static Boolean useCamera2Force;
     public static boolean useNewBlur;
     public static boolean useSurfaceInStories;
@@ -681,6 +691,7 @@ public class SharedConfig {
             dayNightWallpaperSwitchHint = preferences.getInt("dayNightWallpaperSwitchHint", 0);
             bigCameraForRound = preferences.getBoolean("bigCameraForRound", false);
             tgfeedHideStories = preferences.getBoolean("tgfeedHideStories", false); // TGFEED
+            tgfeedCountPosts = preferences.getBoolean("tgfeedCountPosts", true); // TGFEED
             useNewBlur = preferences.getBoolean("useNewBlur", true);
             useCamera2Force = !preferences.contains("useCamera2Force_2") ? null : preferences.getBoolean("useCamera2Force_2", false);
             useSurfaceInStories = preferences.getBoolean("useSurfaceInStories", Build.VERSION.SDK_INT >= 30);

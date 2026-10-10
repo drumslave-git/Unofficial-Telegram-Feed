@@ -4,14 +4,13 @@ Open work only. A task leaves this file in the commit that finishes it; `git log
 
 Legend: `[ ]` not started, `[~]` in progress (name the branch).
 
-**Current phase:** P2 — Feeds. **Next task:** P2-10.
+**Current phase:** P2 — Feeds. **Next task:** P2-11.
 
 The fork of the official Telegram Android client (DrKLO/Telegram, 12.10.6) that takes over three features of the Flutter app `telegram-feed`: feeds that group channels into one timeline, keyword rules per channel that decide which posts notify and are read aloud, and a switch that hides stories. Everything else stays as the official app has it. Each phase from P1 on ends with a tagged release.
 
 ## P2 — Feeds
 
-- [ ] P2-10 Counting. The "Count unread posts" switch in Notifications and Sounds decides whether a feed shows posts or channels with unread posts; "Mark as read" on a feed marks every channel of it read. The Feeds tab's counts still include posts a feed's filter hides (the timeline's own counter already leaves them out).
-- [ ] P2-11 Hands-on pass on the spare account in NewsFeed and Real News, light and dark, en and uk; release 0.2.0.
+- [ ] P2-11 Hands-on pass on the spare account in NewsFeed and Real News, light and dark, en and uk; release 0.2.0. Known gap to decide then: the Feeds tab's counts include posts a feed's filter hides (the timeline's own counter leaves them out).
 
 ## P3 — Rules and notifications
 

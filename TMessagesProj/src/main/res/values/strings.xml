@@ -21,6 +21,8 @@
     <string name="TgfeedComments">Comments</string>
     <string name="TgfeedShowInChat">Show in chat</string>
     <string name="TgfeedForwarded">Forwarded</string>
+    <string name="TgfeedCountPosts">Count unread posts</string>
+    <string name="TgfeedCountPostsInfo">Feeds count their unread posts; off, they count channels with new posts.</string>
     <string name="TgfeedAddToFeed">Add to feed</string>
     <string name="TgfeedAddedToFeed">**%1$s** added to **%2$s**</string>
     <string name="TgfeedRemovedFromFeed">**%1$s** removed from **%2$s**</string>

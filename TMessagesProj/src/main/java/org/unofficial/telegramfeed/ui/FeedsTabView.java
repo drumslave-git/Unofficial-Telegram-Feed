@@ -22,6 +22,7 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
+import org.telegram.messenger.SharedConfig;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -338,7 +339,8 @@ public class FeedsTabView extends FrameLayout {
             if (holder.getItemViewType() == ROW_FEED) {
                 Feed feed = feedAt(position);
                 if (feed != null) {
-                    ((FeedCell) holder.itemView).set(feed.name, feed.channelIds.size(), channelsWithNewPosts(currentAccount, feed), unreadPosts(currentAccount, feed), position < feeds().size() - 1);
+                    int withNew = channelsWithNewPosts(currentAccount, feed);
+                    ((FeedCell) holder.itemView).set(feed.name, feed.channelIds.size(), withNew, SharedConfig.tgfeedCountPosts ? unreadPosts(currentAccount, feed) : withNew, position < feeds().size() - 1);
                 }
             }
         }

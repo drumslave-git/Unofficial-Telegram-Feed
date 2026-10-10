@@ -147,6 +147,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
     private int badgeNumberMutedRow;
     @Keep
     private int badgeNumberMessagesRow;
+    private int tgfeedCountPostsRow; // TGFEED
     private int badgeNumberSection2Row;
     private int androidAutoAlertRow;
     private int repeatRow;
@@ -193,6 +194,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
         badgeNumberShowRow = rowCount++;
         badgeNumberMutedRow = rowCount++;
         badgeNumberMessagesRow = rowCount++;
+        tgfeedCountPostsRow = rowCount++; // TGFEED
         badgeNumberSection2Row = rowCount++;
 
         inappSectionRow = rowCount++;
@@ -725,6 +727,10 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                 editor.putBoolean("badgeNumberMessages", getNotificationsController().showBadgeMessages);
                 editor.commit();
                 getNotificationsController().updateBadge();
+            } else if (position == tgfeedCountPostsRow) { // TGFEED
+                enabled = SharedConfig.tgfeedCountPosts;
+                SharedConfig.toggleTgfeedCountPosts();
+                getNotificationCenter().postNotificationName(NotificationCenter.tgfeedFeedsChanged);
             } else if (position == notificationsServiceConnectionRow) {
                 SharedPreferences preferences = MessagesController.getNotificationsSettings(currentAccount);
                 enabled = preferences.getBoolean("pushConnection", getMessagesController().backgroundConnection);
@@ -1026,7 +1032,9 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
                     } else if (position == badgeNumberMutedRow) {
                         checkCell.setTextAndCheck(getString("BadgeNumberMutedChats", R.string.BadgeNumberMutedChats), getNotificationsController().showBadgeMuted, true);
                     } else if (position == badgeNumberMessagesRow) {
-                        checkCell.setTextAndCheck(getString("BadgeNumberUnread", R.string.BadgeNumberUnread), getNotificationsController().showBadgeMessages, false);
+                        checkCell.setTextAndCheck(getString("BadgeNumberUnread", R.string.BadgeNumberUnread), getNotificationsController().showBadgeMessages, true); // TGFEED: a row follows
+                    } else if (position == tgfeedCountPostsRow) { // TGFEED
+                        checkCell.setTextAndValueAndCheck(getString(R.string.TgfeedCountPosts), getString(R.string.TgfeedCountPostsInfo), SharedConfig.tgfeedCountPosts, true, false);
                     } else if (position == inchatSoundRow) {
                         checkCell.setTextAndCheck(getString("InChatSound", R.string.InChatSound), preferences.getBoolean("EnableInChatSound", true), true);
                     } else if (position == callsVibrateRow) {
@@ -1202,6 +1210,7 @@ public class NotificationsSettingsActivity extends BaseFragment implements Notif
             } else if (position == inappSoundRow || position == inappVibrateRow || position == notificationsServiceConnectionRow ||
                     position == inappPreviewRow || position == contactJoinedRow || position == pinnedMessageRow ||
                     position == notificationsServiceRow || position == badgeNumberMutedRow || position == badgeNumberMessagesRow ||
+                    position == tgfeedCountPostsRow || // TGFEED
                     position == badgeNumberShowRow || position == inappPriorityRow || position == inchatSoundRow ||
                     position == androidAutoAlertRow || position == accountsAllRow) {
                 return 1;

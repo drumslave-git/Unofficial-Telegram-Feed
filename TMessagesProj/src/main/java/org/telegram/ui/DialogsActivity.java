@@ -3679,7 +3679,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                         return getMessagesStorage().getMainUnreadCount();
                     }
                     if (tabId == FilterTabsView.TGFEED_TAB_ID) { // TGFEED
-                        return tgfeedUnreadChannels();
+                        return SharedConfig.tgfeedCountPosts ? tgfeedUnreadPosts() : tgfeedUnreadChannels();
                     }
                     ArrayList<MessagesController.DialogFilter> dialogFilters = getMessagesController().getDialogFilters();
                     if (tabId < 0 || tabId >= dialogFilters.size()) {
@@ -6966,6 +6966,24 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             org.unofficial.telegramfeed.core.Feed feed = getAccountInstance().getFeedsController().createFeed(name, channels);
             presentFragment(new org.unofficial.telegramfeed.ui.FeedActivity(feed.id));
         });
+    }
+
+    /** The unread posts of every channel in any feed, each channel counted once. */
+    private int tgfeedUnreadPosts() {
+        java.util.HashSet<Long> counted = new java.util.HashSet<>();
+        int count = 0;
+        for (org.unofficial.telegramfeed.core.Feed feed : getAccountInstance().getFeedsController().getFeeds()) {
+            for (long channelId : feed.channelIds) {
+                if (!counted.add(channelId)) {
+                    continue;
+                }
+                TLRPC.Dialog dialog = getMessagesController().getDialog(-channelId);
+                if (dialog != null) {
+                    count += dialog.unread_count;
+                }
+            }
+        }
+        return count;
     }
 
     /** The channels with unread posts across every feed, each counted once. */

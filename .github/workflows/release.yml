@@ -3,8 +3,9 @@ name: release
 # conventional commits since the last tag vX.Y.Z (tool/next_version.sh: feat raises the
 # minor, fix and perf the patch, a breaking change the major, or the minor while 0.x;
 # other commit types alone release nothing). When a release is due it runs the unit
-# tests, builds the signed release APK with all four ABIs, tags the commit and publishes
-# the APK with a changelog on the GitHub release.
+# tests and builds the signed release APK with all four ABIs (job build), opens the APK
+# on an emulator and fails when it crashes (job smoke, tool/smoke.sh), and only then tags
+# the commit and publishes the APK with a changelog on the GitHub release (job publish).
 #
 # Repository secrets: TG_API_ID, TG_API_HASH, GOOGLE_SERVICES_JSON_BASE64,
 # ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
@@ -19,11 +20,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 240
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      release: ${{ steps.v.outputs.release }}
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -96,14 +101,64 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: steps.v.outputs.release == 'true'
         with:
-          name: release-apk
-          path: build/release/*.apk
+          name: release
+          path: build/release/
+          if-no-files-found: error
+
+  smoke:
+    needs: build
+    if: needs.build.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+          path: build/release
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: The release APK opens without crashing
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          ram-size: 4096M
+          disable-animations: true
+          script: tool/smoke.sh --out build/smoke build/release/unofficial-telegram-feed-${{ needs.build.outputs.version }}.apk
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: smoke
+          path: build/smoke/
+
+  publish:
+    needs: [build, smoke]
+    if: needs.build.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+          path: build/release
       - name: Tag and publish
-        if: steps.v.outputs.release == 'true'
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.v.outputs.tag }}
+          tag_name: ${{ needs.build.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: ${{ steps.v.outputs.version }}
+          name: ${{ needs.build.outputs.version }}
           body_path: build/release/notes.md
           files: build/release/*.apk

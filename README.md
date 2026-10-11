@@ -14,7 +14,7 @@ Everything else is the official app, unchanged. This app is not made by Telegram
 
 ## Install
 
-Release APKs are on the [GitHub Releases](https://github.com/drumslave-git/Unofficial-Telegram-Feed/releases) page, one APK for every version with all four ABIs. The app installs beside the official Telegram app and logs in as its own session. Releases are automatic: every push to `master` with a feature or a fix is versioned from its commits, tagged and published, and the release notes name the Telegram version it is built on.
+Release APKs are on the [GitHub Releases](https://github.com/drumslave-git/Unofficial-Telegram-Feed/releases) page, one APK for every version with all four ABIs. The app installs beside the official Telegram app and logs in as its own session. Releases are automatic: every push to `master` with a feature or a fix is versioned from its commits, opened on an emulator, and tagged and published only when it starts without crashing, and the release notes name the Telegram version it is built on.
 
 ## Build
 
@@ -32,7 +32,7 @@ export ANDROID_HOME=/path/to/android-sdk
 adb install -r TMessagesProj_App/build/outputs/apk/afat/debug/app.apk
 ```
 
-`tool/ci.sh` builds the debug APK and runs the unit tests. The build recipe in detail, the emulator and the upstream merge procedure are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+`tool/ci.sh` builds the debug APK and runs the unit tests. `tool/smoke.sh <apk>` opens an APK on an emulator and fails when it crashes. The build recipe in detail, the emulator and the upstream merge procedure are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Telegram's conditions
 

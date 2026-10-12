@@ -21,6 +21,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.tgnet.TLRPC;
@@ -60,6 +61,7 @@ public class FeedsTabView extends FrameLayout {
     private final ItemTouchHelper itemTouchHelper;
     private boolean reordering;
     private int headerOffset;
+    private final NotificationCenter.NotificationCenterDelegate themeObserver = (id, account, args) -> updateColors();
 
     public FeedsTabView(Context context, BaseFragment fragment, View dialogsList, Theme.ResourcesProvider resourcesProvider) {
         super(context);
@@ -100,6 +102,26 @@ public class FeedsTabView extends FrameLayout {
 
     private FeedsController controller() {
         return FeedsController.getInstance(currentAccount);
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        NotificationCenter.getGlobalInstance().addObserver(themeObserver, NotificationCenter.didSetNewTheme);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        NotificationCenter.getGlobalInstance().removeObserver(themeObserver, NotificationCenter.didSetNewTheme);
+    }
+
+    /** Takes a new theme's colours; the rows are made again, since each takes its colours when it is made. */
+    private void updateColors() {
+        setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray, resourcesProvider));
+        listView.setAdapter(null);
+        listView.getRecycledViewPool().clear();
+        listView.setAdapter(adapter);
     }
 
     /** Re-reads the feeds and their counts. */

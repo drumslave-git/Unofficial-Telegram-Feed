@@ -30,6 +30,8 @@ public class SpeechTextTest {
         assertEquals("News: Київ сьогодні", prepare("𝐍𝐞𝐰𝐬: Київ сьогодні"));
         assertEquals("New post in Retro. hi", SpeechText.prepare("hi", "𝓡𝓮𝓽𝓻𝓸", 600, "link", "… and more", INTRO));
         assertEquals("Hello", SpeechText.plain("Ｈｅｌｌｏ"));
+        assertEquals("only for the brave 21+ link", prepare("🍑 ᴏɴʟʏ ꜰᴏʀ ᴛʜᴇ ʙʀᴀᴠᴇ 𝟤𝟣+  🍑 https://t.me/+abc"));
+        assertEquals("abcdefghijklmnopqrstuvwyz", SpeechText.plain("ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘꞯʀꜱᴛᴜᴠᴡʏᴢ"));
     }
 
     @Test

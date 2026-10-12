@@ -24,13 +24,32 @@ public final class SpeechText {
     private SpeechText() {
     }
 
+    /** Small capitals, which have no plain form in Unicode, and the letters they stand for. */
+    private static final String SMALL_CAPITALS = "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘꞯʀꜱᴛᴜᴠᴡʏᴢ";
+    private static final String SMALL_CAPITAL_LETTERS = "abcdefghijklmnopqrstuvwyz";
+
     /**
-     * The post with its styled letters made plain (NFKC): channels write in "bold" and "script"
-     * Unicode letters (𝐒𝐭𝐮𝐝𝐞𝐧𝐭𝐬), which language detection takes for another script and the
-     * speech engine cannot read. The language is detected on this text.
+     * The post with its styled letters made plain: channels write in "bold", "script" and small
+     * capital Unicode letters (𝐒𝐭𝐮𝐝𝐞𝐧𝐭𝐬, ᴏɴʟʏ), which language detection takes for another
+     * script and the speech engine cannot read. NFKC makes most of them plain; small capitals are
+     * mapped by hand. The language is detected on this text.
      */
     public static String plain(String text) {
-        return text == null ? null : Normalizer.normalize(text, Normalizer.Form.NFKC);
+        if (text == null) {
+            return null;
+        }
+        String t = Normalizer.normalize(text, Normalizer.Form.NFKC);
+        StringBuilder out = null;
+        for (int i = 0; i < t.length(); i++) {
+            int k = SMALL_CAPITALS.indexOf(t.charAt(i));
+            if (k >= 0) {
+                if (out == null) {
+                    out = new StringBuilder(t);
+                }
+                out.setCharAt(i, SMALL_CAPITAL_LETTERS.charAt(k));
+            }
+        }
+        return out == null ? t : out.toString();
     }
 
     /**

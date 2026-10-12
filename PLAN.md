@@ -10,7 +10,7 @@ The fork of the official Telegram Android client (DrKLO/Telegram, 12.10.6) that 
 
 ## P5 — Release 1.0
 
-- [ ] P5-1 Core-flow sweep on the emulator: login, chat list, folders, feeds, rules, read aloud, stories switch, light and dark, en and uk, Samsung notification behaviour noted in SPEC.md.
+- [ ] P5-1 Core-flow sweep on the emulator with a local release build (`docs/ARCHITECTURE.md`, Release APK for hands-on passes): login, chat list, folders, feeds, rules, read aloud, stories switch, light and dark, en and uk, Samsung notification behaviour noted in SPEC.md.
 - [ ] P5-2 Release 1.0.0 on GitHub Releases. `telegram-feed`'s README points to the fork as the continued app.
 - [ ] P5-3 First upstream merge after the release, following the procedure in `docs/ARCHITECTURE.md`.
 

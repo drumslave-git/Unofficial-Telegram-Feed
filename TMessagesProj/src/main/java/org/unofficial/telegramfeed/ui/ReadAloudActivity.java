@@ -3,7 +3,6 @@ package org.unofficial.telegramfeed.ui;
 import static org.telegram.messenger.AndroidUtilities.dp;
 
 import android.content.Context;
-import android.content.res.Configuration;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
 import android.media.AudioAttributes;
@@ -45,6 +44,7 @@ import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.RecyclerListView;
 import org.unofficial.telegramfeed.feeds.ReadAloudController;
 import org.unofficial.telegramfeed.feeds.ReadAloudSettings;
+import org.unofficial.telegramfeed.feeds.SpokenWords;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -337,9 +337,7 @@ public class ReadAloudActivity extends BaseFragment {
         tts.setSpeechRate(ReadAloudSettings.getRate());
         tts.setPitch(ReadAloudSettings.getPitch());
         String words = "en".equals(language) || "uk".equals(language) ? language : ReadAloudController.interfaceLanguage();
-        Configuration config = new Configuration(ApplicationLoader.applicationContext.getResources().getConfiguration());
-        config.setLocale(Locale.forLanguageTag(words));
-        String text = ApplicationLoader.applicationContext.createConfigurationContext(config).getString(R.string.TgfeedPreviewText);
+        String text = SpokenWords.get(words, R.string.TgfeedPreviewText);
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tgfeed_preview");
     }
 

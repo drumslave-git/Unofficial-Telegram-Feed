@@ -28,6 +28,8 @@ public class ReadAloudService extends Service {
     private static final String CHANNEL = "tgfeed_read_aloud";
     private static final int NOTIFICATION_ID = 0x7f0e1a01;
     private static boolean running;
+    /** onStartCommand ran: the service went to the foreground and may be stopped from outside. */
+    private static boolean started;
 
     static void start() {
         if (running) {
@@ -54,6 +56,11 @@ public class ReadAloudService extends Service {
             return;
         }
         running = false;
+        if (!started) {
+            // Android kills an app whose foreground service stops before it went to the foreground;
+            // onStartCommand stops it right after, when the queue has no work.
+            return;
+        }
         try {
             ApplicationLoader.applicationContext.stopService(new Intent(ApplicationLoader.applicationContext, ReadAloudService.class));
         } catch (Throwable e) {
@@ -73,6 +80,7 @@ public class ReadAloudService extends Service {
         } catch (Throwable e) {
             FileLog.e(e);
         }
+        started = true;
         if (!ReadAloudController.hasWork()) {
             running = false;
             stopSelf();
@@ -83,6 +91,7 @@ public class ReadAloudService extends Service {
     @Override
     public void onDestroy() {
         running = false;
+        started = false;
         super.onDestroy();
     }
 

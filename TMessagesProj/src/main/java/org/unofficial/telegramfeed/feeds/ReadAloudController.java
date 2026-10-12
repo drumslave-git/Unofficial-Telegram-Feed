@@ -1,7 +1,6 @@
 package org.unofficial.telegramfeed.feeds;
 
 import android.content.Context;
-import android.content.res.Configuration;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
@@ -305,10 +304,9 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
             return;
         }
         String introLanguage = "en".equals(item.language) || "uk".equals(item.language) ? item.language : interfaceLanguage();
-        Context words = localized(introLanguage);
         item.spoken = SpeechText.prepare(item.text, item.channelTitle, ReadAloudSettings.getMaxChars(),
-                words.getString(R.string.TgfeedTtsLink), words.getString(R.string.TgfeedTtsMore),
-                channel -> words.getString(R.string.TgfeedTtsIntro, channel));
+                SpokenWords.get(introLanguage, R.string.TgfeedTtsLink), SpokenWords.get(introLanguage, R.string.TgfeedTtsMore),
+                channel -> SpokenWords.get(introLanguage, R.string.TgfeedTtsIntro, channel));
         if (item.spoken.isEmpty()) {
             current = null;
             next();
@@ -599,12 +597,6 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
     public static String interfaceLanguage() {
         Locale locale = LocaleController.getInstance().getCurrentLocale();
         return locale != null && "uk".equals(locale.getLanguage()) ? "uk" : "en";
-    }
-
-    private static Context localized(String language) {
-        Configuration config = new Configuration(ApplicationLoader.applicationContext.getResources().getConfiguration());
-        config.setLocale(Locale.forLanguageTag(language));
-        return ApplicationLoader.applicationContext.createConfigurationContext(config);
     }
 
     private static void log(String message) {

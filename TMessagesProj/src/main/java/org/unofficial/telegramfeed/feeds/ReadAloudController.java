@@ -290,7 +290,7 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
             speak(item);
             return;
         }
-        LanguageDetector.detectLanguage(item.text, language -> AndroidUtilities.runOnUIThread(() -> {
+        LanguageDetector.detectLanguage(SpeechText.plain(item.text), language -> AndroidUtilities.runOnUIThread(() -> {
             item.language = language;
             prepareAndSpeak(item);
         }), e -> AndroidUtilities.runOnUIThread(() -> {

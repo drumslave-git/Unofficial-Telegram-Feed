@@ -25,6 +25,14 @@ public class SpeechTextTest {
     }
 
     @Test
+    public void styledLettersBecomePlain() {
+        assertEquals("Students Sex Campus link", prepare("𝐒𝐭𝐮𝐝𝐞𝐧𝐭𝐬 𝐒𝐞𝐱 𝐂𝐚𝐦𝐩𝐮𝐬 https://t.me/+abc"));
+        assertEquals("News: Київ сьогодні", prepare("𝐍𝐞𝐰𝐬: Київ сьогодні"));
+        assertEquals("New post in Retro. hi", SpeechText.prepare("hi", "𝓡𝓮𝓽𝓻𝓸", 600, "link", "… and more", INTRO));
+        assertEquals("Hello", SpeechText.plain("Ｈｅｌｌｏ"));
+    }
+
+    @Test
     public void formattingMarkersGo() {
         assertEquals("Bold it code quote tag", prepare("**Bold** _it_ `code` > quote #tag"));
     }

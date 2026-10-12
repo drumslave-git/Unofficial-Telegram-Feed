@@ -1,14 +1,15 @@
 package org.unofficial.telegramfeed.core;
 
+import java.text.Normalizer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The text a post is read aloud as: links become a word for "link", mentions, emoji and
- * formatting marks go, whitespace collapses, a long post is cut at a sentence end or a word and
- * marked as cut, and an introduction naming the channel goes first. The words it adds are given
- * by the caller in the language of the voice. No Android dependencies.
+ * The text a post is read aloud as: styled letters become plain ones, links become a word for
+ * "link", mentions, emoji and formatting marks go, whitespace collapses, a long post is cut at a
+ * sentence end or a word and marked as cut, and an introduction naming the channel goes first.
+ * The words it adds are given by the caller in the language of the voice. No Android dependencies.
  */
 public final class SpeechText {
 
@@ -24,6 +25,15 @@ public final class SpeechText {
     }
 
     /**
+     * The post with its styled letters made plain (NFKC): channels write in "bold" and "script"
+     * Unicode letters (𝐒𝐭𝐮𝐝𝐞𝐧𝐭𝐬), which language detection takes for another script and the
+     * speech engine cannot read. The language is detected on this text.
+     */
+    public static String plain(String text) {
+        return text == null ? null : Normalizer.normalize(text, Normalizer.Form.NFKC);
+    }
+
+    /**
      * The text to hand to the speech engine, or an empty string when nothing is worth reading.
      *
      * @param intro the introduction for a channel title, such as "New post in %s."; null for none
@@ -32,7 +42,7 @@ public final class SpeechText {
         if (text == null) {
             return "";
         }
-        String t = URL.matcher(text).replaceAll(Matcher.quoteReplacement(" " + linkWord + " "));
+        String t = URL.matcher(plain(text)).replaceAll(Matcher.quoteReplacement(" " + linkWord + " "));
         t = MENTION.matcher(t).replaceAll(" ");
         t = withoutEmoji(t);
         t = MARKERS.matcher(t).replaceAll(" ");
@@ -55,7 +65,7 @@ public final class SpeechText {
             t = stripEnd(t.substring(0, Math.min(cut + 1, t.length()))) + moreSuffix;
         }
         if (channelTitle != null && intro != null) {
-            String title = SPACE.matcher(withoutEmoji(channelTitle)).replaceAll(" ").trim();
+            String title = SPACE.matcher(withoutEmoji(plain(channelTitle))).replaceAll(" ").trim();
             if (!title.isEmpty()) {
                 return intro.apply(title) + " " + t;
             }

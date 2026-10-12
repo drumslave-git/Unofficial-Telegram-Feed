@@ -1,7 +1,7 @@
 package org.unofficial.telegramfeed.core;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 /**
@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
  */
 public final class RuleEvaluator {
 
-    private final Map<RuleExpr.Term, Pattern> cache = new HashMap<>();
+    private final Map<RuleExpr.Term, Pattern> cache = new ConcurrentHashMap<>();
 
     public boolean matches(RuleExpr expr, String text) {
         if (expr instanceof RuleExpr.And) {

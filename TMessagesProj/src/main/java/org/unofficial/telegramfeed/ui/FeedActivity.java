@@ -190,6 +190,8 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
     private long pendingJumpKey;
     /** Whether to show the newest posts once a reload from the top finishes. */
     private boolean scrollToBottomOnLoad;
+    /** The feed changed while the timeline was hidden; its rows are rebuilt when it shows again. */
+    private boolean rowsStale;
     private final HashSet<Long> resultKeys = new HashSet<>();
     /** The selected posts in selection mode, keyed by channel and id, in selection order. */
     private final LinkedHashMap<Long, MessageObject> selectedPosts = new LinkedHashMap<>();
@@ -294,6 +296,15 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
     public void onPause() {
         super.onPause();
         savePosition();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (rowsStale) {
+            rowsStale = false;
+            rebuildRows();
+        }
     }
 
     @Override
@@ -1530,7 +1541,12 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             if (changed) {
                 loadInitial();
             }
-            rebuildRows();
+            if (isPaused) {
+                // Under the feed's editor: rebuilt once when the timeline shows again, not on every change.
+                rowsStale = true;
+            } else {
+                rebuildRows();
+            }
         } else if (id == NotificationCenter.updateInterfaces || id == NotificationCenter.tgfeedCountsChanged) {
             updatePagedownButton();
         }

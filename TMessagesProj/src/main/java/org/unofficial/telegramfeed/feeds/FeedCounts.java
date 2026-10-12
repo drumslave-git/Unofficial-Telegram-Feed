@@ -7,6 +7,7 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.UserConfig;
+import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.unofficial.telegramfeed.core.Feed;
@@ -25,7 +26,9 @@ import java.util.Map;
  * themselves are fetched ({@code messages.getHistory} above the read mark) and judged by each
  * feed's filter; a read drops posts locally and a new post fetches only what came after the
  * newest known one. A feed without a filter counts as Telegram does. Until a channel's posts are
- * in, its count is Telegram's. Lives on the UI thread; posts {@link NotificationCenter#tgfeedCountsChanged}.
+ * in, its count is Telegram's. A feed's count of a channel is kept until the channel's posts or
+ * the feed's filter change, since the chat list asks for the counts on every update; fetched posts
+ * are described on a background thread. Lives on the UI thread; posts {@link NotificationCenter#tgfeedCountsChanged}.
  */
 public class FeedCounts {
 
@@ -50,12 +53,24 @@ public class FeedCounts {
         final List<FeedFilter.Post> posts = new ArrayList<>();
         boolean loading;
         boolean loadedOnce;
+        /** Grows with every change of {@link #posts}, so a kept count knows it is stale. */
+        int version;
         /** The state a full fetch was last made for, so a count that never adds up does not fetch again and again. */
         String fullFetchKey;
     }
 
+    /** A feed's count of one channel, valid while the channel's posts and the feed's filter stay as they were. */
+    private static final class Judged {
+        FeedFilter filter;
+        boolean wholePost;
+        int version;
+        int unreadCount;
+        int count;
+    }
+
     private final int currentAccount;
     private final HashMap<Long, ChannelUnread> channels = new HashMap<>();
+    private final HashMap<String, Judged> judged = new HashMap<>();
     private boolean notifyScheduled;
 
     private FeedCounts(int account) {
@@ -79,6 +94,11 @@ public class FeedCounts {
         if (state == null || !state.loadedOnce) {
             return dialog.unread_count;
         }
+        String key = feed.id + "_" + channelId;
+        Judged kept = judged.get(key);
+        if (kept != null && kept.version == state.version && kept.unreadCount == dialog.unread_count && kept.wholePost == feed.showWholePost && kept.filter.equals(feed.filter)) {
+            return kept.count;
+        }
         int shown = 0;
         LinkedHashMap<Long, List<FeedFilter.Post>> albums = new LinkedHashMap<>();
         for (int i = 0; i < state.posts.size(); i++) {
@@ -100,7 +120,16 @@ public class FeedCounts {
             shown += feed.filter.shownParts(parts, feed.showWholePost).size();
         }
         int unchecked = Math.max(0, dialog.unread_count - state.posts.size());
-        return shown + unchecked;
+        if (kept == null) {
+            kept = new Judged();
+            judged.put(key, kept);
+        }
+        kept.filter = new FeedFilter(feed.filter);
+        kept.wholePost = feed.showWholePost;
+        kept.version = state.version;
+        kept.unreadCount = dialog.unread_count;
+        kept.count = shown + unchecked;
+        return kept.count;
     }
 
     public int unreadPosts(Feed feed) {
@@ -181,6 +210,7 @@ public class FeedCounts {
                 }
             }
             state.readMax = dialog.read_inbox_max_id;
+            state.version++;
         }
         if (dialog.top_message > state.topMessage) {
             fetch(channelId, state, dialog, false);
@@ -207,29 +237,41 @@ public class FeedCounts {
             state.fullFetchKey = dialog.read_inbox_max_id + "_" + dialog.top_message + "_" + dialog.unread_count;
         }
         List<TLRPC.Message> collected = new ArrayList<>();
-        loadPage(peer, minId, 0, wanted, collected, () -> {
-            state.loading = false;
-            if (full) {
-                state.ids.clear();
-                state.posts.clear();
-            }
-            HashSet<Integer> known = new HashSet<>(state.ids);
-            List<Integer> newIds = new ArrayList<>();
-            List<FeedFilter.Post> newPosts = new ArrayList<>();
+        loadPage(peer, minId, 0, wanted, collected, () -> Utilities.globalQueue.postRunnable(() -> {
+            // Building a MessageObject is heavy and a fetch brings up to 500 of them.
+            List<Integer> fetchedIds = new ArrayList<>();
+            List<FeedFilter.Post> fetchedPosts = new ArrayList<>();
             for (TLRPC.Message message : collected) {
-                if (message.id <= readMax || known.contains(message.id) || message instanceof TLRPC.TL_messageEmpty) {
+                if (message.id <= readMax || message instanceof TLRPC.TL_messageEmpty) {
                     continue;
                 }
-                newIds.add(message.id);
-                newPosts.add(PostFilter.describe(new MessageObject(currentAccount, message, false, false)));
+                fetchedIds.add(message.id);
+                fetchedPosts.add(PostFilter.describe(new MessageObject(currentAccount, message, false, false)));
             }
-            state.ids.addAll(0, newIds);
-            state.posts.addAll(0, newPosts);
-            state.readMax = readMax;
-            state.topMessage = Math.max(state.topMessage, top);
-            state.loadedOnce = true;
-            scheduleNotify();
-        });
+            AndroidUtilities.runOnUIThread(() -> {
+                state.loading = false;
+                if (full) {
+                    state.ids.clear();
+                    state.posts.clear();
+                }
+                HashSet<Integer> known = new HashSet<>(state.ids);
+                List<Integer> newIds = new ArrayList<>();
+                List<FeedFilter.Post> newPosts = new ArrayList<>();
+                for (int i = 0; i < fetchedIds.size(); i++) {
+                    if (known.add(fetchedIds.get(i))) {
+                        newIds.add(fetchedIds.get(i));
+                        newPosts.add(fetchedPosts.get(i));
+                    }
+                }
+                state.ids.addAll(0, newIds);
+                state.posts.addAll(0, newPosts);
+                state.readMax = readMax;
+                state.topMessage = Math.max(state.topMessage, top);
+                state.loadedOnce = true;
+                state.version++;
+                scheduleNotify();
+            });
+        }));
     }
 
     private void loadPage(TLRPC.InputPeer peer, int minId, int offsetId, int wanted, List<TLRPC.Message> collected, Runnable done) {
@@ -277,5 +319,6 @@ public class FeedCounts {
     /** The account logged out. */
     public void cleanup() {
         channels.clear();
+        judged.clear();
     }
 }

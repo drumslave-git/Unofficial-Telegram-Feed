@@ -61,7 +61,7 @@ The primary user follows 20 to 200 Telegram channels (news, niche communities, a
 
 ### Notification rules
 
-- A rule belongs to a channel. I reach a channel's rules from its profile and from its notification settings ("Rules"), every rule from the "Unofficial Telegram Feed" settings section, and a feed's rules from the feed's menu; the list shows every rule under its channel, with the feed's name where the rule is scoped by one.
+- A rule belongs to a channel. I reach a channel's rules from its profile, its notification settings and the ⋮ menu inside the channel ("Rules"), every rule from the "Unofficial Telegram Feed" settings section, and a feed's rules from the feed's menu; the list shows every rule under its channel, with the feed's name where the rule is scoped by one.
 - A rule's condition is built from terms combined with AND / OR / NOT, in a visual builder or as text with its syntax sheet. A term is a word or phrase with options: whole word, case sensitive.
 - A rule has a name and a switch, a channel picked from the joined channels with a search, an optional feed whose filter limits it to the posts the feed shows (offered only when the channel is in a feed that has a filter), a priority, read-aloud and a schedule of weekdays and two times. The editor explains what each priority does; picking "urgent" opens Android's list of apps allowed through Do Not Disturb while the app is not allowed yet. A dry run over the channel's recent posts says how many posts it checked and would have matched. Leaving with unsaved changes asks first.
 - A channel with at least one enabled rule notifies only for posts a rule matches. A channel without rules notifies as the official app does.
@@ -95,7 +95,7 @@ The primary user follows 20 to 200 Telegram channels (news, niche communities, a
 4. **Feed timeline**: the posts of the feed's channels drawn with the official app's message cells in the group layout, the "Unread posts" divider, day labels and the floating day, the button to the newest posts, the post menu, selection, the viewer, the search bar with its list and chips.
 5. **Feed info**: the feed's name and channels, its rules, and the shared media tabs over all its channels.
 6. **Rules list** and **rule editor**: name and switch, channel, optional feed, the condition as a builder or as text, the dry run, priority, read-aloud, schedule.
-7. **Settings**: the "Unofficial Telegram Feed" section before Chat Settings with "Hide stories", "Rules" and "Read aloud"; the "Rules" block and "Count unread posts" in Notifications and Sounds; "Rules" in a channel's profile and notification settings.
+7. **Settings**: the "Unofficial Telegram Feed" section before Chat Settings with "Hide stories", "Rules" and "Read aloud"; the "Rules" block and "Count unread posts" in Notifications and Sounds; "Rules" in a channel's profile, notification settings and ⋮ menu.
 
 ## 5. Out of scope
 

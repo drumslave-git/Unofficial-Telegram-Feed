@@ -1688,6 +1688,7 @@ public class ChatActivity extends BaseFragment implements
     private final static int chat_menu_topic_create = 73;
 
     private final static int id_chat_compose_panel = 1000;
+    private final static int tgfeed_rules = 1001; // TGFEED: the channel's rules
 
     RecyclerListView.OnItemLongClickListenerExtended onItemLongClickListener = new RecyclerListView.OnItemLongClickListenerExtended() {
         @Override
@@ -3893,6 +3894,8 @@ public class ChatActivity extends BaseFragment implements
                     } catch (Exception e) {
                         FileLog.e(e);
                     }
+                } else if (id == tgfeed_rules) { // TGFEED
+                    presentFragment(org.unofficial.telegramfeed.ui.RulesActivity.ofChannel(currentChat.id)); // TGFEED
                 } else if (id == boost_group) {
                     if (ChatObject.hasAdminRights(currentChat)) {
                         BoostsActivity boostsActivity = new BoostsActivity(dialog_id);
@@ -4412,6 +4415,9 @@ public class ChatActivity extends BaseFragment implements
             if (searchItem != null) {
                 headerItem.lazilyAddSubItem(search, R.drawable.msg_search, LocaleController.getString(R.string.Search));
             }
+            if (ChatObject.isChannelAndNotMegaGroup(currentChat) && !isTopic && chatMode == MODE_DEFAULT) { // TGFEED
+                headerItem.lazilyAddSubItem(tgfeed_rules, R.drawable.msg_notifications, LocaleController.getString(R.string.TgfeedRules)); // TGFEED
+            } // TGFEED
             if (ChatObject.isBoostSupported(currentChat) && (getUserConfig().isPremium() || ChatObject.isBoosted(chatInfo) || ChatObject.hasAdminRights(currentChat))) {
                 RLottieDrawable drawable = new RLottieDrawable(R.raw.boosts, dp(24), dp(24));
                 headerItem.lazilyAddSubItem(boost_group, drawable, LocaleController.getString(ChatObject.isChannelAndNotMegaGroup(currentChat) ? R.string.BoostingBoostChannelMenu : R.string.BoostingBoostGroupMenu));

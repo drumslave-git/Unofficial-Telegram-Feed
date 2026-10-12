@@ -275,7 +275,7 @@ public class FeedEditActivity extends BaseFragment implements NotificationCenter
     }
 
     private void openAddChannels() {
-        new AddChannelsSheet(this, feed, channelIds -> {
+        ChannelsSheet.addToFeed(this, feed, channelIds -> {
             for (long channelId : channelIds) {
                 feed.addChannel(channelId);
             }

@@ -21,7 +21,6 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessageObject;
@@ -382,45 +381,16 @@ public class RuleEditActivity extends BaseFragment {
         }
     }
 
-    /** The channels the account follows, by name. */
-    private List<TLRPC.Chat> followedChannels() {
-        List<TLRPC.Chat> out = new ArrayList<>();
-        for (TLRPC.Dialog dialog : getMessagesController().getAllDialogs()) {
-            if (dialog.id >= 0) {
-                continue;
-            }
-            TLRPC.Chat chat = getMessagesController().getChat(-dialog.id);
-            if (chat != null && ChatObject.isChannelAndNotMegaGroup(chat) && !chat.left && !chat.kicked) {
-                out.add(chat);
-            }
-        }
-        Collections.sort(out, (a, b) -> a.title.compareToIgnoreCase(b.title));
-        return out;
-    }
-
     private void pickChannel() {
-        List<TLRPC.Chat> channels = followedChannels();
-        if (channels.isEmpty()) {
-            BulletinFactory.of(this).createSimpleBulletin(R.raw.chats_infotip, LocaleController.getString(R.string.TgfeedNoChannelsToAdd)).show();
-            return;
-        }
-        CharSequence[] labels = new CharSequence[channels.size()];
-        int selected = -1;
-        for (int i = 0; i < channels.size(); i++) {
-            labels[i] = channels.get(i).title;
-            if (channels.get(i).id == draft.channelId) {
-                selected = i;
-            }
-        }
-        TgfeedAlerts.choose(this, LocaleController.getString(R.string.TgfeedRuleChannel), labels, selected, index -> {
-            draft.channelId = channels.get(index).id;
+        ChannelsSheet.pickOne(this, draft.channelId, channelId -> {
+            draft.channelId = channelId;
             Feed feed = FeedsController.getInstance(currentAccount).getFeed(draft.feedId);
             if (feed != null && !feed.channelIds.contains(draft.channelId)) {
                 draft.feedId = 0;
             }
             dryRunResult = null;
             updateRows();
-        });
+        }).show();
     }
 
     private void pickFeed() {

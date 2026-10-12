@@ -5,7 +5,6 @@ import static org.telegram.messenger.AndroidUtilities.dp;
 import android.app.Activity;
 import android.content.Context;
 import android.text.Editable;
-import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
@@ -20,6 +19,7 @@ import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
+import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.BottomSheetWithRecyclerListView;
 import org.telegram.ui.Components.FragmentSearchField;
 import org.telegram.ui.Components.LayoutHelper;
@@ -32,20 +32,26 @@ import org.unofficial.telegramfeed.core.Feed;
 import org.unofficial.telegramfeed.feeds.FeedsController;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 
 /**
- * The sheet that adds channels to a feed: the joined channels with a search, multi-select, one
- * "Add" press, and a remembered checkbox that hides channels already in a feed.
+ * The joined channels with a search, in two modes: adding channels to a feed (multi-select, one
+ * "Add" press, and a remembered checkbox that hides channels already in a feed) and picking the
+ * one channel of a rule (a tap picks it).
  */
-public class AddChannelsSheet extends BottomSheetWithRecyclerListView {
+public class ChannelsSheet extends BottomSheetWithRecyclerListView {
 
     private static final int ID_HIDE = 1;
     private static final String PREF_HIDE = "tgfeedHideChannelsInFeeds";
 
+    /** The feed channels are added to; null when picking one channel. */
     private final Feed feed;
     private final Utilities.Callback<List<Long>> onAdd;
+    private final Utilities.Callback<Long> onPick;
+    private final long pickedId;
+    private final boolean ready;
     private final LinkedHashSet<Long> selected = new LinkedHashSet<>();
     private final FrameLayout searchContainer;
     private final FragmentSearchField searchField;
@@ -54,19 +60,31 @@ public class AddChannelsSheet extends BottomSheetWithRecyclerListView {
     private String query = "";
     private boolean hideInFeeds;
 
-    public AddChannelsSheet(BaseFragment fragment, Feed feed, Utilities.Callback<List<Long>> onAdd) {
-        super(fragment.getParentActivity(), fragment, true, true, false, false, false, ActionBarType.SLIDING, fragment.getResourceProvider());
+    /** Adds the channels picked to the feed. */
+    public static ChannelsSheet addToFeed(BaseFragment fragment, Feed feed, Utilities.Callback<List<Long>> onAdd) {
+        return new ChannelsSheet(fragment, feed, onAdd, null, 0);
+    }
+
+    /** Picks one channel; {@code pickedId} is the channel picked so far, 0 for none. */
+    public static ChannelsSheet pickOne(BaseFragment fragment, long pickedId, Utilities.Callback<Long> onPick) {
+        return new ChannelsSheet(fragment, null, null, onPick, pickedId);
+    }
+
+    private ChannelsSheet(BaseFragment fragment, Feed feed, Utilities.Callback<List<Long>> onAdd, Utilities.Callback<Long> onPick, long pickedId) {
+        // Not edge to edge: the sheet then sees the keyboard and stands above it while the search is typed into.
+        super(fragment.getParentActivity(), fragment, true, false, false, false, ActionBarType.SLIDING, fragment.getResourceProvider());
         this.feed = feed;
+        updateTitle(); // the base constructor asked for the title before the mode was known
         this.onAdd = onAdd;
-        hideInFeeds = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE).getBoolean(PREF_HIDE, true);
-        occupyNavigationBar = true;
-        drawNavigationBar = false;
+        this.onPick = onPick;
+        this.pickedId = pickedId;
+        hideInFeeds = feed != null && ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE).getBoolean(PREF_HIDE, true);
+        smoothKeyboardAnimationEnabled = true;
         ignoreTouchActionBar = false;
         showShadow = false;
-        AndroidUtilities.enableEdgeToEdge(getWindow());
         Context context = getContext();
 
-        recyclerListView.setPadding(backgroundPaddingLeft, 0, backgroundPaddingLeft, AndroidUtilities.navigationBarHeight + dp(68));
+        recyclerListView.setPadding(backgroundPaddingLeft, 0, backgroundPaddingLeft, dp(feed != null ? 68 : 8));
         recyclerListView.setClipToPadding(false);
         recyclerListView.setOnItemClickListener((view, position) -> {
             UItem item = adapter.getItem(position - 1);
@@ -79,6 +97,12 @@ public class AddChannelsSheet extends BottomSheetWithRecyclerListView {
                 adapter.update(true);
             } else if (item.object instanceof TLRPC.Chat) {
                 long id = ((TLRPC.Chat) item.object).id;
+                if (feed == null) {
+                    AndroidUtilities.hideKeyboard(recyclerListView);
+                    onPick.run(id);
+                    dismiss();
+                    return;
+                }
                 if (!selected.remove(id)) {
                     selected.add(id);
                 }
@@ -98,22 +122,28 @@ public class AddChannelsSheet extends BottomSheetWithRecyclerListView {
         });
         searchContainer = new FrameLayout(context);
         searchContainer.setPadding(backgroundPaddingLeft, 0, backgroundPaddingLeft, 0);
+        // Pinned under the action bar, it hides the rows that scroll beneath it.
+        View searchBackground = new View(context);
+        searchBackground.setBackgroundColor(getThemedColor(Theme.key_dialogBackground));
+        searchContainer.addView(searchBackground, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         searchContainer.addView(searchField, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 40, Gravity.TOP, 10, 8, 10, 0));
         containerView.addView(searchContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 56, Gravity.TOP));
 
-        button = new ButtonWithCounterView(context, resourcesProvider);
-        button.setText(LocaleController.getString(R.string.Add), false);
-        button.setOnClickListener(v -> {
-            if (selected.isEmpty()) {
-                return;
-            }
-            onAdd.run(new ArrayList<>(selected));
-            dismiss();
-        });
-        FrameLayout buttonContainer = new FrameLayout(context);
-        buttonContainer.setPadding(backgroundPaddingLeft + dp(10), dp(10), backgroundPaddingLeft + dp(10), AndroidUtilities.navigationBarHeight + dp(10));
-        buttonContainer.addView(button, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48));
-        containerView.addView(buttonContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM));
+        if (feed != null) {
+            button = new ButtonWithCounterView(context, resourcesProvider);
+            button.setText(LocaleController.getString(R.string.Add), false);
+            button.setOnClickListener(v -> {
+                if (selected.isEmpty()) {
+                    return;
+                }
+                onAdd.run(new ArrayList<>(selected));
+                dismiss();
+            });
+            FrameLayout buttonContainer = new FrameLayout(context);
+            buttonContainer.setPadding(backgroundPaddingLeft + dp(10), dp(10), backgroundPaddingLeft + dp(10), dp(10));
+            buttonContainer.addView(button, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48));
+            containerView.addView(buttonContainer, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.BOTTOM));
+        }
         recyclerListView.addItemDecoration(new androidx.recyclerview.widget.RecyclerView.ItemDecoration() {
             @Override
             public void onDrawOver(@androidx.annotation.NonNull android.graphics.Canvas c, @androidx.annotation.NonNull androidx.recyclerview.widget.RecyclerView parent, @androidx.annotation.NonNull androidx.recyclerview.widget.RecyclerView.State state) {
@@ -121,6 +151,7 @@ public class AddChannelsSheet extends BottomSheetWithRecyclerListView {
             }
         });
         updateSearchY();
+        ready = true;
         adapter.update(false);
     }
 
@@ -147,7 +178,7 @@ public class AddChannelsSheet extends BottomSheetWithRecyclerListView {
 
     @Override
     protected CharSequence getTitle() {
-        return LocaleController.getString(R.string.TgfeedAddChannels);
+        return LocaleController.getString(feed != null ? R.string.TgfeedAddChannels : R.string.TgfeedRuleChannel);
     }
 
     @Override
@@ -157,7 +188,7 @@ public class AddChannelsSheet extends BottomSheetWithRecyclerListView {
         return adapter;
     }
 
-    /** The joined channels that are not in this feed, filtered by the checkbox and the search. */
+    /** The joined channels, by name when picking one; for a feed, those not in it, filtered by the checkbox. Then the search. */
     private List<TLRPC.Chat> channels() {
         MessagesController messagesController = MessagesController.getInstance(currentAccount);
         FeedsController feedsController = FeedsController.getInstance(currentAccount);
@@ -171,7 +202,7 @@ public class AddChannelsSheet extends BottomSheetWithRecyclerListView {
             if (chat == null || !ChatObject.isChannelAndNotMegaGroup(chat) || chat.left || chat.kicked) {
                 continue;
             }
-            if (feed.hasChannel(chat.id)) {
+            if (feed != null && feed.hasChannel(chat.id)) {
                 continue;
             }
             if (hideInFeeds && feedsController.isChannelInAnyFeed(chat.id)) {
@@ -186,22 +217,34 @@ public class AddChannelsSheet extends BottomSheetWithRecyclerListView {
             }
             out.add(chat);
         }
+        if (feed == null) {
+            Collections.sort(out, (a, b) -> (a.title == null ? "" : a.title).compareToIgnoreCase(b.title == null ? "" : b.title));
+        }
         return out;
     }
 
     private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {
-        if (feed == null) {
+        if (!ready) {
             return; // the base constructor fills the list before this sheet's fields are set
         }
         items.add(UItem.asSpace(0, dp(56)));
-        items.add(UItem.asCheck(ID_HIDE, LocaleController.getString(R.string.TgfeedHideChannelsInFeeds)).setChecked(hideInFeeds));
+        if (feed != null) {
+            items.add(UItem.asCheck(ID_HIDE, LocaleController.getString(R.string.TgfeedHideChannelsInFeeds)).setChecked(hideInFeeds));
+        }
         List<TLRPC.Chat> channels = channels();
         if (channels.isEmpty()) {
             items.add(UItem.asShadow(LocaleController.getString(R.string.TgfeedNoChannelsToAdd)));
             return;
         }
         for (TLRPC.Chat chat : channels) {
-            items.add(UItem.asUserCheckbox((int) (chat.id ^ (chat.id >>> 32)), chat).setChecked(selected.contains(chat.id)));
+            int id = (int) (chat.id ^ (chat.id >>> 32));
+            if (feed != null) {
+                items.add(UItem.asUserCheckbox(id, chat).setChecked(selected.contains(chat.id)));
+            } else {
+                UItem item = UItem.asRadioUser(chat).setChecked(chat.id == pickedId);
+                item.id = id;
+                items.add(item);
+            }
         }
         items.add(UItem.asShadow(null));
     }

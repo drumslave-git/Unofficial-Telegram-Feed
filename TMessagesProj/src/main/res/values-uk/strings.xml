@@ -123,9 +123,10 @@
     <string name="TgfeedRuleChannel">Канал</string>
     <string name="TgfeedPickChannel">Виберіть канал</string>
     <string name="TgfeedPickChannelFirst">Спершу виберіть канал.</string>
-    <string name="TgfeedRuleFeed">Лише те, що показує стрічка</string>
-    <string name="TgfeedNoFeed">Усі дописи</string>
-    <string name="TgfeedRuleFeedInfo">Якщо вибрано стрічку, правило бачить лише ті дописи каналу, які показує фільтр стрічки.</string>
+    <string name="TgfeedRuleFeed">Фільтр стрічки</string>
+    <string name="TgfeedNoFeed">Вимкнено</string>
+    <string name="TgfeedRuleFeedInfo">Виберіть стрічку, щоб правило сповіщало лише про дописи, які показує її фільтр.</string>
+    <string name="TgfeedRuleFeedOn">Правило бачить лише дописи, які показує стрічка «%1$s».</string>
     <string name="TgfeedRuleCondition">Умова</string>
     <string name="TgfeedRuleConditionInfo">Правило сповіщає про дописи, текст яких відповідає умові.</string>
     <string name="TgfeedRuleNoCondition">Умови немає: сповіщення надходитиме про кожен новий допис каналу. Додайте слова, щоб отримувати сповіщення лише про деякі з них.</string>

@@ -222,12 +222,17 @@ public class RuleEditActivity extends BaseFragment {
 
         rows.add(new Row(T_HEADER, 0, 0, LocaleController.getString(R.string.TgfeedRuleWatches)));
         rows.add(new Row(T_CHANNEL, 0, 0, null));
-        rows.add(new Row(T_FEED, 0, 0, null));
-        String watchesInfo = LocaleController.getString(R.string.TgfeedRuleFeedInfo);
-        if (draft.channelId != 0 && getMessagesController().isDialogMuted(-draft.channelId, 0)) {
-            watchesInfo = LocaleController.getString(R.string.TgfeedChannelMutedNote) + "\n\n" + watchesInfo;
+        String watchesInfo = null;
+        if (draft.channelId != 0 && (draft.feedId != 0 || !filteringFeeds().isEmpty())) {
+            rows.add(new Row(T_FEED, 0, 0, null));
+            Feed feed = FeedsController.getInstance(currentAccount).getFeed(draft.feedId);
+            watchesInfo = feed != null ? LocaleController.formatString(R.string.TgfeedRuleFeedOn, feed.name) : LocaleController.getString(R.string.TgfeedRuleFeedInfo);
         }
-        rows.add(new Row(T_INFO, 0, 0, watchesInfo));
+        if (draft.channelId != 0 && getMessagesController().isDialogMuted(-draft.channelId, 0)) {
+            String muted = LocaleController.getString(R.string.TgfeedChannelMutedNote);
+            watchesInfo = watchesInfo == null ? muted : muted + "\n\n" + watchesInfo;
+        }
+        rows.add(watchesInfo != null ? new Row(T_INFO, 0, 0, watchesInfo) : new Row(T_SHADOW, 0, 0, null));
 
         rows.add(new Row(T_HEADER, 0, 0, LocaleController.getString(R.string.TgfeedRuleCondition)));
         rows.add(new Row(T_MODE, 0, 0, null));
@@ -399,12 +404,23 @@ public class RuleEditActivity extends BaseFragment {
         }).show();
     }
 
+    /** The feeds of the rule's channel that have a filter, the only ones that can narrow what the rule sees. */
+    private List<Feed> filteringFeeds() {
+        List<Feed> feeds = new ArrayList<>();
+        for (Feed feed : FeedsController.getInstance(currentAccount).getFeedsOfChannel(draft.channelId)) {
+            if (!feed.filter.isEmpty() || feed.id == draft.feedId) {
+                feeds.add(feed);
+            }
+        }
+        return feeds;
+    }
+
     private void pickFeed() {
         if (draft.channelId == 0) {
             BulletinFactory.of(this).createSimpleBulletin(R.raw.chats_infotip, LocaleController.getString(R.string.TgfeedPickChannelFirst)).show();
             return;
         }
-        List<Feed> feeds = FeedsController.getInstance(currentAccount).getFeedsOfChannel(draft.channelId);
+        List<Feed> feeds = filteringFeeds();
         CharSequence[] labels = new CharSequence[feeds.size() + 1];
         labels[0] = LocaleController.getString(R.string.TgfeedNoFeed);
         int selected = 0;

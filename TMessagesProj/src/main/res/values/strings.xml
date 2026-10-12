@@ -115,9 +115,10 @@
     <string name="TgfeedRuleChannel">Channel</string>
     <string name="TgfeedPickChannel">Choose a channel</string>
     <string name="TgfeedPickChannelFirst">Choose the channel first.</string>
-    <string name="TgfeedRuleFeed">Only what a feed shows</string>
-    <string name="TgfeedNoFeed">Every post</string>
-    <string name="TgfeedRuleFeedInfo">With a feed chosen, the rule sees only the channel\'s posts that the feed\'s filter shows.</string>
+    <string name="TgfeedRuleFeed">Use a feed\'s filter</string>
+    <string name="TgfeedNoFeed">Off</string>
+    <string name="TgfeedRuleFeedInfo">Pick a feed to be notified only about the posts its filter shows.</string>
+    <string name="TgfeedRuleFeedOn">The rule sees only the posts the feed %1$s shows.</string>
     <string name="TgfeedRuleCondition">Condition</string>
     <string name="TgfeedRuleConditionInfo">The rule notifies about the posts whose text matches the condition.</string>
     <string name="TgfeedRuleNoCondition">No condition: every new post of the channel notifies. Add words to notify only about some of them.</string>

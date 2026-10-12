@@ -6870,6 +6870,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         if (page.tgfeedView != null) {
             page.tgfeedView.setVisibility(show ? View.VISIBLE : View.GONE);
             if (show) {
+                page.tgfeedView.setHeaderOffset((int) scrollYOffset);
                 page.tgfeedView.update();
             }
         }
@@ -9126,6 +9127,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             return;
         }
         scrollYOffset = value;
+        if (viewPages != null) { // TGFEED: the Feeds tab follows the header as it folds
+            for (ViewPage page : viewPages) { // TGFEED
+                if (page != null && page.tgfeedView != null) page.tgfeedView.setHeaderOffset((int) value); // TGFEED
+            } // TGFEED
+        } // TGFEED
         if (topBulletin != null) {
             topBulletin.updatePosition();
         }

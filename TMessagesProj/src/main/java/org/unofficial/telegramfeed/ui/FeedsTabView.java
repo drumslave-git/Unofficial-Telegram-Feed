@@ -59,6 +59,7 @@ public class FeedsTabView extends FrameLayout {
     private final Adapter adapter;
     private final ItemTouchHelper itemTouchHelper;
     private boolean reordering;
+    private int headerOffset;
 
     public FeedsTabView(Context context, BaseFragment fragment, View dialogsList, Theme.ResourcesProvider resourcesProvider) {
         super(context);
@@ -113,11 +114,31 @@ public class FeedsTabView extends FrameLayout {
         listView.smoothScrollToPosition(0);
     }
 
+    /**
+     * How far the chat list's header is moved up from its full height (0 or less): it folds the
+     * stories and the search field away as the chats scroll, and the dialogs list scrolls its
+     * rows by the same amount, so the feeds start that much higher than the list's padding.
+     */
+    public void setHeaderOffset(int offset) {
+        if (headerOffset != offset) {
+            headerOffset = offset;
+            updatePadding();
+        }
+    }
+
+    private void updatePadding() {
+        if (dialogsList == null) {
+            return;
+        }
+        int top = Math.max(0, dialogsList.getPaddingTop() + headerOffset);
+        if (listView.getPaddingTop() != top || listView.getPaddingBottom() != dialogsList.getPaddingBottom()) {
+            listView.setPadding(0, top, 0, dialogsList.getPaddingBottom());
+        }
+    }
+
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        if (dialogsList != null && (listView.getPaddingTop() != dialogsList.getPaddingTop() || listView.getPaddingBottom() != dialogsList.getPaddingBottom())) {
-            listView.setPadding(0, dialogsList.getPaddingTop(), 0, dialogsList.getPaddingBottom());
-        }
+        updatePadding();
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     }
 

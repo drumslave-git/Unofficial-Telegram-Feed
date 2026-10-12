@@ -82,6 +82,11 @@ public class FilterTabsView extends FrameLayout {
     public static final int TGFEED_TAB_ID = 1 << 20;
     public static final int TGFEED_STABLE_ID = 1 << 20;
 
+    /** TGFEED: the Feeds tab counts posts, so its counter is shortened (73K); a folder's stays whole. */
+    private static String tgfeedCounterText(int tabId, int count) {
+        return tabId == TGFEED_TAB_ID ? org.unofficial.telegramfeed.core.CountFormat.shortCount(count) : String.format("%d", count);
+    }
+
     private boolean tgfeedIsFeedsTab(int position) {
         return position >= 0 && position < tabs.size() && tabs.get(position).id == TGFEED_TAB_ID;
     }
@@ -167,7 +172,7 @@ public class FilterTabsView extends FrameLayout {
 
             final int counterResultWidth;
             if (c > 0) {
-                String counterText = String.format("%d", c);
+                String counterText = tgfeedCounterText(id, c); // TGFEED
                 int counterWidth = (int) Math.ceil(textCounterPaint.measureText(counterText));
                 int countWidth = Math.max(dp(TAB_COUNTER_HEIGHT - 10), counterWidth) + dp(10);
                 counterResultWidth = countWidth + dp(-2);
@@ -387,9 +392,9 @@ public class FilterTabsView extends FrameLayout {
 
             if (currentTab.counter > 0 || animateCounterRemove) {
                 if (animateCounterRemove) {
-                    counterText = String.format("%d", animateFromTabCount);
+                    counterText = tgfeedCounterText(currentTab.id, animateFromTabCount); // TGFEED
                 } else {
-                    counterText = String.format("%d", currentTab.counter);
+                    counterText = tgfeedCounterText(currentTab.id, currentTab.counter); // TGFEED
                 }
                 counterWidth = (int) Math.ceil(textCounterPaint.measureText(counterText));
                 countWidth = (int) Math.max(dp(TAB_COUNTER_HEIGHT - 10), counterWidth) + dp(10);
@@ -635,8 +640,8 @@ public class FilterTabsView extends FrameLayout {
                 animateFromCountWidth = lastCountWidth;
                 animateFromCounterWidth = lastCounterWidth;
                 if (animateFromTabCount > 0 && currentTab.counter > 0) {
-                    String oldStr = String.valueOf(animateFromTabCount);
-                    String newStr = String.valueOf(currentTab.counter);
+                    String oldStr = tgfeedCounterText(currentTab.id, animateFromTabCount); // TGFEED
+                    String newStr = tgfeedCounterText(currentTab.id, currentTab.counter); // TGFEED
 
                     if (oldStr.length() == newStr.length()) {
                         SpannableStringBuilder oldSpannableStr = new SpannableStringBuilder(oldStr);
@@ -668,7 +673,7 @@ public class FilterTabsView extends FrameLayout {
             int countWidth;
             String counterText = null;
             if (currentTab.counter > 0) {
-                counterText = String.format("%d", currentTab.counter);
+                counterText = tgfeedCounterText(currentTab.id, currentTab.counter); // TGFEED
                 int counterWidth = (int) Math.ceil(textCounterPaint.measureText(counterText));
                 countWidth = Math.max(dp(TAB_COUNTER_HEIGHT - 10), counterWidth) + dp(10);
             } else {

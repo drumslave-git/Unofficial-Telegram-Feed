@@ -41,7 +41,7 @@ The primary user follows 20 to 200 Telegram channels (news, niche communities, a
 
 ### Feeds and channels
 
-- The "Feeds" tab lists my feeds: name, how many channels, how many of them have new posts, and the unread count in the accent colour. Its "New feed" button creates one, empty or with the channels of a Telegram folder (a one-time copy); a drag handle reorders; a row's menu edits the channels, renames, marks the feed read or deletes it, saying how many rules go with it.
+- The "Feeds" tab lists my feeds: name, how many channels, how many of them have new posts, and the unread count in the accent colour, shortened from a thousand on (1.1K, 73K) as on the tab. Its "New feed" button creates one, empty or with the channels of a Telegram folder (a one-time copy); a drag handle reorders; a row's menu edits the channels, renames, marks the feed read or deletes it, saying how many rules go with it.
 - With no feeds yet, the tab says what a feed is and offers to create one.
 - The tab counts the channels with unread posts once, however many feeds hold them. A tap on the tab that is already open scrolls its list to the top.
 - A feed's editor shows its name with a pencil and its ordered channels, each removable with Undo. I add channels from the channels I have joined, with a search box; I tick as many as I want and add them with one press. A checkbox hides the channels that are already in a feed, and the sheet remembers it.

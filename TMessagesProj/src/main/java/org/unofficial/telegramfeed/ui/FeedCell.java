@@ -17,8 +17,8 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.Components.CounterView;
 import org.telegram.ui.Components.LayoutHelper;
+import org.unofficial.telegramfeed.core.CountFormat;
 
 /** One feed in the Feeds tab: name, channel counts, the unread counter and a drag handle. */
 public class FeedCell extends FrameLayout {
@@ -26,7 +26,7 @@ public class FeedCell extends FrameLayout {
     private final Theme.ResourcesProvider resourcesProvider;
     private final TextView nameView;
     private final TextView subtitleView;
-    private final CounterView counterView;
+    private final TextView counterView;
     public final ImageView reorderView;
     private boolean needDivider;
 
@@ -54,10 +54,15 @@ public class FeedCell extends FrameLayout {
         subtitleView.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         addView(subtitleView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP | Gravity.START, 20, 36, 108, 0));
 
-        counterView = new CounterView(context, resourcesProvider);
-        counterView.setColors(Theme.key_chats_unreadCounterText, Theme.key_chats_unreadCounter);
-        counterView.setGravity(LocaleController.isRTL ? Gravity.LEFT : Gravity.RIGHT); // CounterView knows only LEFT and RIGHT, and fills the row's width
-        addView(counterView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 28, Gravity.CENTER_VERTICAL, LocaleController.isRTL ? 52 : 0, 0, LocaleController.isRTL ? 0 : 52, 0));
+        // The chat list's unread counter, with the count shortened (73K) as the Feeds tab shows it.
+        counterView = new TextView(context);
+        counterView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
+        counterView.setTypeface(AndroidUtilities.bold());
+        counterView.setGravity(Gravity.CENTER);
+        counterView.setSingleLine(true);
+        counterView.setMinWidth(dp(23));
+        counterView.setPadding(dp(7), 0, dp(7), 0);
+        addView(counterView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 23, Gravity.END | Gravity.CENTER_VERTICAL, 0, 0, 54, 0));
 
         reorderView = new ImageView(context);
         reorderView.setImageResource(R.drawable.list_reorder);
@@ -74,7 +79,10 @@ public class FeedCell extends FrameLayout {
             subtitle += " · " + LocaleController.formatPluralString("TgfeedChannelsWithNewPosts", channelsWithNewPosts);
         }
         subtitleView.setText(subtitle);
-        counterView.setCount(unread, false);
+        counterView.setText(CountFormat.shortCount(unread));
+        counterView.setTextColor(Theme.getColor(Theme.key_chats_unreadCounterText, resourcesProvider));
+        counterView.setBackground(Theme.createRoundRectDrawable(dp(11.5f), Theme.getColor(Theme.key_chats_unreadCounter, resourcesProvider)));
+        counterView.setVisibility(unread > 0 ? VISIBLE : GONE);
         needDivider = divider;
         setWillNotDraw(!divider);
     }

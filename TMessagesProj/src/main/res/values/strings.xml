@@ -168,7 +168,7 @@
     <string name="TgfeedDiscard">Discard</string>
     <string name="TgfeedKeepEditing">Keep editing</string>
     <string name="TgfeedDndTitle">Show urgent posts in Do Not Disturb?</string>
-    <string name="TgfeedDndText">Urgent rules can break through Do Not Disturb, but Android must allow this app to do so: turn on \"Override Do Not Disturb\". Open the setting now? The rule works either way.</string>
+    <string name="TgfeedDndText">Urgent rules break through Do Not Disturb once Android lets this app do so. Open the setting and allow Unofficial Telegram Feed in its list? The rule works either way.</string>
     <string name="TgfeedLater">Later</string>
     <string name="TgfeedOpenSettings">Open settings</string>
     <string name="TgfeedNotifyAskTitle">Let the app notify you?</string>

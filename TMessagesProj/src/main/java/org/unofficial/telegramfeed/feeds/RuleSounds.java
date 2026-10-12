@@ -22,7 +22,8 @@ import org.unofficial.telegramfeed.core.Rule;
  * The sound and vibration of rule notifications, device-wide, and the notification channels that
  * carry them. Android fixes a channel's sound and vibration once it exists, so a change replaces
  * the channel of that priority with a new one under the next id ({@code tgfeed_rules_normal},
- * then {@code tgfeed_rules_normal_1}, ...).
+ * then {@code tgfeed_rules_normal_1}, ...). The urgent channel asks to bypass Do Not Disturb,
+ * which Android grants to an app that has Do Not Disturb access.
  */
 public final class RuleSounds {
 
@@ -134,7 +135,49 @@ public final class RuleSounds {
     /** The channel id of a priority, its channels created first. */
     public static synchronized String channelFor(int priority) {
         ensureChannels();
+        if (priority == Rule.PRIORITY_URGENT) {
+            letUrgentThroughDnd(false);
+        }
         return channelId(priority);
+    }
+
+    /** Whether the user gave the app Do Not Disturb access, which lets the urgent channel through. */
+    public static boolean hasDndAccess() {
+        if (Build.VERSION.SDK_INT < 26) {
+            return false;
+        }
+        try {
+            return manager().isNotificationPolicyAccessGranted();
+        } catch (Exception e) {
+            FileLog.e(e);
+            return false;
+        }
+    }
+
+    /**
+     * With Do Not Disturb access, lets the urgent channel through Do Not Disturb. Android takes
+     * that from the app only while the user has not changed the channel in its settings; with
+     * {@code replaceChanged}, right after the user granted the access, such a channel is replaced.
+     */
+    public static synchronized void letUrgentThroughDnd(boolean replaceChanged) {
+        if (!hasDndAccess()) {
+            return;
+        }
+        try {
+            ensureChannels();
+            NotificationManager manager = manager();
+            NotificationChannel urgent = manager.getNotificationChannel(channelId(Rule.PRIORITY_URGENT));
+            if (urgent == null || urgent.canBypassDnd()) {
+                return;
+            }
+            manager.createNotificationChannel(urgentChannel());
+            urgent = manager.getNotificationChannel(channelId(Rule.PRIORITY_URGENT));
+            if (replaceChanged && urgent != null && !urgent.canBypassDnd()) {
+                replaceChannel(Rule.PRIORITY_URGENT);
+            }
+        } catch (Exception e) {
+            FileLog.e(e);
+        }
     }
 
     private static String channelId(int priority) {
@@ -185,13 +228,17 @@ public final class RuleSounds {
             manager.createNotificationChannel(silent);
 
             manager.createNotificationChannel(alerting(Rule.PRIORITY_NORMAL, R.string.TgfeedRuleChannelNormal));
-            NotificationChannel urgent = alerting(Rule.PRIORITY_URGENT, R.string.TgfeedRuleChannelUrgent);
-            urgent.setBypassDnd(true);
-            manager.createNotificationChannel(urgent);
+            manager.createNotificationChannel(urgentChannel());
             createdKey = key;
         } catch (Exception e) {
             FileLog.e(e);
         }
+    }
+
+    private static NotificationChannel urgentChannel() {
+        NotificationChannel urgent = alerting(Rule.PRIORITY_URGENT, R.string.TgfeedRuleChannelUrgent);
+        urgent.setBypassDnd(true);
+        return urgent;
     }
 
     private static NotificationChannel alerting(int priority, int nameRes) {

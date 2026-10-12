@@ -206,6 +206,12 @@ public class RuleEditActivity extends BaseFragment {
         return fragmentView;
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        TgfeedAlerts.checkDoNotDisturbAccess();
+    }
+
     // ---------------------------------------------------------------- rows
 
     private void updateRows() {

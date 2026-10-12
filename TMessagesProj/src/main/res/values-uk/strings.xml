@@ -178,7 +178,7 @@
     <string name="TgfeedDiscard">Відхилити</string>
     <string name="TgfeedKeepEditing">Редагувати далі</string>
     <string name="TgfeedDndTitle">Показувати термінові дописи в режимі «Не турбувати»?</string>
-    <string name="TgfeedDndText">Термінові правила можуть сповіщати навіть у режимі «Не турбувати», але Android має дозволити це застосунку: увімкніть «Ігнорувати режим \"Не турбувати\"». Відкрити налаштування зараз? Правило працюватиме в будь-якому разі.</string>
+    <string name="TgfeedDndText">Термінові правила сповіщають навіть у режимі «Не турбувати», щойно Android це дозволить застосунку. Відкрити налаштування й дозволити Unofficial Telegram Feed у списку? Правило працюватиме в будь-якому разі.</string>
     <string name="TgfeedLater">Пізніше</string>
     <string name="TgfeedOpenSettings">Відкрити налаштування</string>
     <string name="TgfeedNotifyAskTitle">Дозволити застосунку надсилати сповіщення?</string>

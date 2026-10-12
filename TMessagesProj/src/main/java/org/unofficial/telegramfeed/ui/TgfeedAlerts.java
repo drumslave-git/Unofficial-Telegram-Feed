@@ -377,12 +377,19 @@ public final class TgfeedAlerts {
         fragment.showDialog(builder.create());
     }
 
+    /** Set while Android's Do Not Disturb access screen is open from {@link #offerDoNotDisturb}. */
+    private static boolean dndAccessRequested;
+
     /**
-     * Offers Android's settings of the urgent rule notifications, where "Override Do Not Disturb"
-     * lets them through Do Not Disturb.
+     * Urgent rules break through Do Not Disturb once the app has Do Not Disturb access: with it,
+     * the urgent channel is let through at once; without it, offers Android's access screen.
      */
     public static void offerDoNotDisturb(BaseFragment fragment) {
         if (android.os.Build.VERSION.SDK_INT < 26 || fragment.getParentActivity() == null) {
+            return;
+        }
+        if (org.unofficial.telegramfeed.feeds.RuleSounds.hasDndAccess()) {
+            org.unofficial.telegramfeed.feeds.RuleSounds.letUrgentThroughDnd(true);
             return;
         }
         AlertDialog.Builder b = new AlertDialog.Builder(fragment.getParentActivity(), fragment.getResourceProvider());
@@ -391,15 +398,22 @@ public final class TgfeedAlerts {
         b.setNegativeButton(LocaleController.getString(R.string.TgfeedLater), null);
         b.setPositiveButton(LocaleController.getString(R.string.TgfeedOpenSettings), (d, w) -> {
             try {
-                android.content.Intent intent = new android.content.Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
-                intent.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, fragment.getParentActivity().getPackageName());
-                intent.putExtra(android.provider.Settings.EXTRA_CHANNEL_ID, org.unofficial.telegramfeed.feeds.RuleSounds.channelFor(org.unofficial.telegramfeed.core.Rule.PRIORITY_URGENT));
-                fragment.getParentActivity().startActivity(intent);
+                dndAccessRequested = true;
+                fragment.getParentActivity().startActivity(new android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS));
             } catch (Exception e) {
+                dndAccessRequested = false;
                 org.telegram.messenger.FileLog.e(e);
             }
         });
         fragment.showDialog(b.create());
+    }
+
+    /** Back from Android's Do Not Disturb access screen: lets the urgent channel through when the access was given. */
+    public static void checkDoNotDisturbAccess() {
+        if (dndAccessRequested && org.unofficial.telegramfeed.feeds.RuleSounds.hasDndAccess()) {
+            dndAccessRequested = false;
+            org.unofficial.telegramfeed.feeds.RuleSounds.letUrgentThroughDnd(true);
+        }
     }
 
     /** Whether Android may hold the app back while the phone sleeps. */

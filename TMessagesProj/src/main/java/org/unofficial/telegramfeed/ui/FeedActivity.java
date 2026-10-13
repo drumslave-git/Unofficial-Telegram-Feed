@@ -66,11 +66,13 @@ import org.telegram.ui.TopicsFragment;
 import org.telegram.ui.Components.CounterView;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.MessageBackgroundDrawable;
+import org.telegram.ui.Components.RadialProgressView;
 import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.SizeNotifierFrameLayout;
 import org.unofficial.telegramfeed.core.Feed;
 import org.unofficial.telegramfeed.core.FeedOrder;
 import org.unofficial.telegramfeed.core.FeedFilter;
+import org.unofficial.telegramfeed.core.FeedWindow;
 import org.unofficial.telegramfeed.feeds.FeedSearch;
 import org.unofficial.telegramfeed.feeds.FeedsController;
 import org.unofficial.telegramfeed.feeds.PostFilter;
@@ -88,8 +90,9 @@ import java.util.List;
  * A feed's timeline: the posts of all its channels in one chronological list, oldest on top,
  * drawn with Telegram's message cells in the group layout so that every post carries its
  * channel's name and photo. History comes per channel through {@code MessagesController.loadMessages}
- * and is merged by date; posts older than the oldest loaded post of any channel that still has
- * history wait until that channel has loaded as far, so the list never shows a gap.
+ * and is merged by date. Every channel loads around one date (the saved post's, the oldest
+ * unread post's, or now) and the list shows once all have; posts beyond what every channel has
+ * loaded through wait until it has ({@link FeedWindow}), so the list never shows a gap.
  */
 public class FeedActivity extends BaseFragment implements NotificationCenter.NotificationCenterDelegate, DialogsActivity.DialogsActivityDelegate {
 
@@ -102,37 +105,51 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
     private static final int INITIAL_COUNT = 30;
     private static final int OLDER_COUNT = 50;
 
-    /** The loading state of one channel's history. */
-    private static class ChannelState {
+    /** A channel's newest posts. */
+    private static final int REQ_NEWEST = 0;
+    /** The posts around a channel's oldest unread post. */
+    private static final int REQ_UNREAD = 1;
+    /** The posts around a date. */
+    private static final int REQ_AROUND = 2;
+    private static final int REQ_OLDER = 3;
+    private static final int REQ_NEWER = 4;
+
+    /** Where the list goes once the channels have loaded: the saved post, the unread divider, the newest post, a search match. */
+    private static final int TARGET_SAVED = 1;
+    private static final int TARGET_UNREAD = 2;
+    private static final int TARGET_BOTTOM = 3;
+    private static final int TARGET_JUMP = 4;
+
+    /** The loading state of one channel's history: its loaded run of posts and the request in flight. */
+    private static class ChannelState extends FeedWindow.Channel {
         final long channelId;
         final int classGuid = ConnectionsManager.generateClassGuid();
         int loadIndex;
+        /** The load index of the request in flight; an answer to an earlier request is dropped. */
+        int requestIndex = -1;
+        /** What the request in flight asks for, one of the {@code REQ_} values. */
+        int request;
+        /** The date a {@link #REQ_AROUND} request loads around. */
+        int aroundDate;
         boolean loading;
-        boolean loadedOnce;
         boolean cacheEnd;
-        boolean endReached;
         int minId = Integer.MAX_VALUE;
-        int minDate = Integer.MAX_VALUE;
         int maxId;
-        int maxDate;
-        /** The channel was loaded around a date and newer posts are still on the server. */
-        boolean hasNewer;
+        /** The date of the channel's oldest unread post, from a {@link #REQ_UNREAD} load; 0 for none. */
+        int firstUnreadDate;
 
         ChannelState(long channelId) {
             this.channelId = channelId;
         }
 
-        /** Forgets the loaded range, keeping the guid and the load index. */
+        /** Forgets the loaded run, keeping the guid and the load index. */
         void reset() {
+            forget();
             loading = false;
-            loadedOnce = false;
             cacheEnd = false;
-            endReached = false;
             minId = Integer.MAX_VALUE;
-            minDate = Integer.MAX_VALUE;
             maxId = 0;
-            maxDate = 0;
-            hasNewer = false;
+            firstUnreadDate = 0;
         }
     }
 
@@ -157,7 +174,25 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
     private long unreadDividerKey;
     private boolean unreadDividerDecided;
     private boolean unreadDividerSeen;
-    private boolean restoredPosition;
+    /**
+     * The channels are loading for a new place in the feed: around the saved post, the oldest
+     * unread post, the newest posts or a search match. The rows wait under a progress until every
+     * channel has loaded as far, so the list never shows a part of the feed and then shifts.
+     */
+    private boolean opening;
+    /** The first step of opening at the oldest unread post: the channels with unread posts load around theirs. */
+    private boolean probing;
+    /** Where the list goes once opened, one of the {@code TARGET_} values. */
+    private int openTarget;
+    /** The post of {@link #TARGET_SAVED} or {@link #TARGET_JUMP}, keyed like {@link #posts}. */
+    private long openKey;
+    /** The saved post's offset from the list's top. */
+    private int openOffset;
+    /** The date every channel loads around while opening; 0 for the newest posts. */
+    private int anchorDate;
+    /** The feed opened before its list was made; the list goes to its place when it is. */
+    private boolean positionPending;
+    private View progressView;
 
     private SizeNotifierFrameLayout contentView;
     private RecyclerListView listView;
@@ -186,10 +221,6 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
     private int pendingSearchIndex = -1;
     /** The post lit up after a jump, keyed like {@link #posts}; 0 for none. */
     private long highlightKey;
-    /** A post to scroll to once the history around it has loaded. */
-    private long pendingJumpKey;
-    /** Whether to show the newest posts once a reload from the top finishes. */
-    private boolean scrollToBottomOnLoad;
     /** The feed changed while the timeline was hidden; its rows are rebuilt when it shows again. */
     private boolean rowsStale;
     private final HashSet<Long> resultKeys = new HashSet<>();
@@ -264,6 +295,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             channels.put(channelId, new ChannelState(channelId));
         }
         getNotificationCenter().addObserver(this, NotificationCenter.messagesDidLoad);
+        getNotificationCenter().addObserver(this, NotificationCenter.loadingMessagesFailed);
         getNotificationCenter().addObserver(this, NotificationCenter.didReceiveNewMessages);
         getNotificationCenter().addObserver(this, NotificationCenter.messagesDeleted);
         getNotificationCenter().addObserver(this, NotificationCenter.replaceMessagesObjects);
@@ -271,7 +303,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         getNotificationCenter().addObserver(this, NotificationCenter.tgfeedCountsChanged);
         getNotificationCenter().addObserver(this, NotificationCenter.updateInterfaces);
         search = new FeedSearch(currentAccount, this::onSearchResults);
-        loadInitial();
+        openFeed();
         return super.onFragmentCreate();
     }
 
@@ -279,6 +311,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
     public void onFragmentDestroy() {
         savePosition();
         getNotificationCenter().removeObserver(this, NotificationCenter.messagesDidLoad);
+        getNotificationCenter().removeObserver(this, NotificationCenter.loadingMessagesFailed);
         getNotificationCenter().removeObserver(this, NotificationCenter.didReceiveNewMessages);
         getNotificationCenter().removeObserver(this, NotificationCenter.messagesDeleted);
         getNotificationCenter().removeObserver(this, NotificationCenter.replaceMessagesObjects);
@@ -918,9 +951,27 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         pagedownButton.setOnClickListener(v -> onPagedown());
         contentView.addView(pagedownButton, LayoutHelper.createFrame(46, 66, Gravity.RIGHT | Gravity.BOTTOM, 0, 0, 12, 8));
 
+        // As the chat's progress while its first messages load: a spinner on the service bubble.
+        FrameLayout progress = new FrameLayout(context);
+        android.graphics.drawable.GradientDrawable progressBackground = new android.graphics.drawable.GradientDrawable();
+        progressBackground.setCornerRadius(dp(18));
+        progressBackground.setColor(Theme.getColor(Theme.key_chat_serviceBackground));
+        progress.setBackground(progressBackground);
+        RadialProgressView progressBar = new RadialProgressView(context);
+        progressBar.setSize(dp(28));
+        progressBar.setProgressColor(Theme.getColor(Theme.key_chat_serviceText));
+        progress.addView(progressBar, LayoutHelper.createFrame(32, 32, Gravity.CENTER));
+        progress.setVisibility(View.GONE);
+        progressView = progress;
+        contentView.addView(progressView, LayoutHelper.createFrame(36, 36, Gravity.CENTER));
+
         createSearchViews(context);
 
         rebuildRows();
+        if (positionPending && !opening) {
+            positionPending = false;
+            positionAfterOpening();
+        }
         return fragmentView;
     }
 
@@ -1058,7 +1109,9 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         searchIndex = -1;
         pendingSearchIndex = -1;
         highlightKey = 0;
-        pendingJumpKey = 0;
+        if (openTarget == TARGET_JUMP) {
+            openKey = 0; // a load around a match still opens there, without the match
+        }
         if (searchItem != null) {
             searchItem.setShowSearchProgress(false);
         }
@@ -1160,12 +1213,14 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         if (scrollToKey(k)) {
             return;
         }
-        if (posts.containsKey(k)) {
-            // loaded but not among the rows: the feed's filter leaves it out
+        if (hidden.contains(k)) {
+            // the feed's filter leaves it out
             openChannel(getMessagesController().getChat(-found.getDialogId()), found.getId());
             return;
         }
-        pendingJumpKey = k;
+        unreadDividerDecided = true;
+        unreadDividerKey = 0;
+        startOpening(TARGET_JUMP, k, 0);
         loadAround(found.messageOwner.date);
     }
 
@@ -1195,31 +1250,260 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         return false;
     }
 
-    /** Reloads every channel around a date, as a jump to an old match needs; newer posts load as the list scrolls down. */
-    private void loadAround(int date) {
-        for (ChannelState state : channels.values()) {
-            getConnectionsManager().cancelRequestsForGuid(state.classGuid);
-            state.reset();
-            state.loading = true;
-            state.hasNewer = true;
-            getMessagesController().loadMessages(-state.channelId, 0, false, INITIAL_COUNT, 0, date, false, 0, state.classGuid, 4, 0, ChatActivity.MODE_DEFAULT, 0, 0, state.loadIndex++, false);
+    // ---------------------------------------------------------------- opening
+
+    /**
+     * Opens the feed where it was left, else at its oldest unread post, else at the newest post.
+     * Every channel loads around one date, so the merged list is whole around it.
+     */
+    private void openFeed() {
+        String saved = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE).getString(positionKey(), null);
+        String[] parts = saved != null ? saved.split(":") : new String[0];
+        if (parts.length == 4) {
+            try {
+                long savedKey = key(Long.parseLong(parts[0]), Integer.parseInt(parts[1]));
+                int offset = Integer.parseInt(parts[2]);
+                int date = Integer.parseInt(parts[3]);
+                startOpening(TARGET_SAVED, savedKey, offset);
+                loadAround(date);
+                return;
+            } catch (NumberFormatException ignore) {
+            }
         }
-        posts.clear();
-        unreadDividerDecided = true;
-        unreadDividerKey = 0;
+        ArrayList<ChannelState> unread = new ArrayList<>();
+        org.unofficial.telegramfeed.feeds.FeedCounts counts = org.unofficial.telegramfeed.feeds.FeedCounts.getInstance(currentAccount);
+        for (ChannelState state : channels.values()) {
+            TLRPC.Dialog dialog = getMessagesController().getDialog(-state.channelId);
+            if (dialog != null && dialog.read_inbox_max_id < dialog.top_message && counts.visibleUnread(feed, state.channelId) > 0) {
+                unread.add(state);
+            }
+        }
+        if (unread.isEmpty()) {
+            startOpening(TARGET_BOTTOM, 0, 0);
+            loadNewest();
+            return;
+        }
+        // First each channel with unread posts finds its oldest one; then every channel loads around the oldest of them.
+        startOpening(TARGET_UNREAD, 0, 0);
+        probing = true;
+        for (ChannelState state : unread) {
+            reset(state);
+            send(state, REQ_UNREAD, true);
+        }
+    }
+
+    /** The rows wait under the progress until the channels have loaded for the target. */
+    private void startOpening(int target, long key, int offset) {
+        opening = true;
+        probing = false;
+        positionPending = false;
+        openTarget = target;
+        openKey = key;
+        openOffset = offset;
         rebuildRows();
     }
 
-    /** Throws the loaded history away and loads the newest posts again. */
-    private void resetToNewest() {
+    /** Loads every channel whose loaded run does not reach the date around it; newer posts load as the list scrolls down. */
+    private void loadAround(int date) {
+        anchorDate = date;
         for (ChannelState state : channels.values()) {
-            getConnectionsManager().cancelRequestsForGuid(state.classGuid);
-            state.reset();
+            if (state.loading || !state.covers(date)) {
+                reset(state);
+                state.aroundDate = date;
+                send(state, REQ_AROUND, true);
+            }
         }
-        posts.clear();
-        scrollToBottomOnLoad = true;
-        loadInitial();
+        checkOpened();
+    }
+
+    /** Throws the loaded history away and loads the newest posts of every channel. */
+    private void loadNewest() {
+        anchorDate = 0;
+        for (ChannelState state : channels.values()) {
+            reset(state);
+            send(state, REQ_NEWEST, true);
+        }
+        checkOpened();
+    }
+
+    /** Forgets the channel's loaded run and its posts and drops its request in flight. */
+    private void reset(ChannelState state) {
+        getConnectionsManager().cancelRequestsForGuid(state.classGuid);
+        state.reset();
+        state.requestIndex = -1;
+        for (Long k : new ArrayList<>(posts.keySet())) {
+            if ((k >> 32) == state.channelId) {
+                posts.remove(k);
+            }
+        }
+    }
+
+    /** Asks Telegram for a page of the channel; the answer comes as {@code messagesDidLoad} with this load index. */
+    private void send(ChannelState state, int request, boolean fromCache) {
+        state.loading = true;
+        state.request = request;
+        state.requestIndex = state.loadIndex++;
+        long dialogId = -state.channelId;
+        switch (request) {
+            case REQ_NEWEST:
+                getMessagesController().loadMessages(dialogId, 0, false, INITIAL_COUNT, 0, 0, fromCache, 0, state.classGuid, 0, 0, ChatActivity.MODE_DEFAULT, 0, 0, state.requestIndex, false);
+                break;
+            case REQ_UNREAD: {
+                // The cache finds the oldest unread post itself; the server is asked around the post after the read mark.
+                TLRPC.Dialog dialog = getMessagesController().getDialog(dialogId);
+                int maxId = fromCache || dialog == null ? 0 : dialog.read_inbox_max_id + 1;
+                getMessagesController().loadMessages(dialogId, 0, false, INITIAL_COUNT, maxId, 0, fromCache, 0, state.classGuid, 2, 0, ChatActivity.MODE_DEFAULT, 0, 0, state.requestIndex, false);
+                break;
+            }
+            case REQ_AROUND:
+                getMessagesController().loadMessages(dialogId, 0, false, INITIAL_COUNT, 0, state.aroundDate, fromCache, 0, state.classGuid, 4, 0, ChatActivity.MODE_DEFAULT, 0, 0, state.requestIndex, false);
+                break;
+            case REQ_OLDER:
+                getMessagesController().loadMessages(dialogId, 0, false, OLDER_COUNT, state.minId, 0, fromCache, state.minDate, state.classGuid, 0, 0, ChatActivity.MODE_DEFAULT, 0, 0, state.requestIndex, false);
+                break;
+            case REQ_NEWER:
+            default:
+                getMessagesController().loadMessages(dialogId, 0, false, OLDER_COUNT, state.maxId, 0, false, 0, state.classGuid, 1, 0, ChatActivity.MODE_DEFAULT, 0, 0, state.requestIndex, false);
+                break;
+        }
+    }
+
+    /**
+     * Moves the opening on once no channel is loading: from the oldest unread posts to loading
+     * around the oldest of them; then, since a channel whose posts start after the date would
+     * hold the list back above it, those load older posts; then the list shows.
+     */
+    private void checkOpened() {
+        if (!opening || anyLoading()) {
+            return;
+        }
+        if (probing) {
+            probing = false;
+            int oldest = 0;
+            for (ChannelState state : channels.values()) {
+                if (state.firstUnreadDate != 0 && (oldest == 0 || state.firstUnreadDate < oldest)) {
+                    oldest = state.firstUnreadDate;
+                }
+            }
+            if (oldest == 0) {
+                loadNewest();
+            } else {
+                loadAround(oldest);
+            }
+            return;
+        }
+        if (anchorDate != 0) {
+            boolean waiting = false;
+            for (ChannelState state : channels.values()) {
+                if (state.loaded && !state.olderEnd && state.minDate > anchorDate) {
+                    send(state, REQ_OLDER, !state.cacheEnd);
+                    waiting = true;
+                }
+            }
+            if (waiting) {
+                return;
+            }
+        }
+        opening = false;
         rebuildRows();
+        if (listView == null) {
+            positionPending = true;
+            return;
+        }
+        positionAfterOpening();
+        AndroidUtilities.runOnUIThread(() -> {
+            checkLoadOlder();
+            checkLoadNewer();
+        });
+    }
+
+    /** Puts the list at the opening's target. */
+    private void positionAfterOpening() {
+        if (layoutManager == null || messages.isEmpty()) {
+            return;
+        }
+        switch (openTarget) {
+            case TARGET_SAVED: {
+                int index = indexOfKey(openKey);
+                if (index < 0) {
+                    index = indexAtDate(anchorDate);
+                }
+                if (index >= 0) {
+                    layoutManager.scrollToPositionWithOffset(adapter.positionOf(index), openOffset, false);
+                    return;
+                }
+                break;
+            }
+            case TARGET_UNREAD: {
+                int divider = unreadDividerPosition();
+                if (divider >= 0) {
+                    unreadDividerSeen = true;
+                    layoutManager.scrollToPositionWithOffset(divider, dp(48), false);
+                    return;
+                }
+                int index = indexAtDate(anchorDate);
+                if (index >= 0) {
+                    layoutManager.scrollToPositionWithOffset(adapter.positionOf(index), dp(48), false);
+                    return;
+                }
+                break;
+            }
+            case TARGET_JUMP: {
+                if (openKey != 0) {
+                    long k = openKey;
+                    openKey = 0;
+                    if (scrollToKey(k)) {
+                        return;
+                    }
+                    MessageObject target = posts.get(k);
+                    if (target != null) {
+                        // the feed's filter leaves it out
+                        openChannel(getMessagesController().getChat(-target.getDialogId()), target.getId());
+                    }
+                }
+                int index = indexAtDate(anchorDate);
+                if (index >= 0) {
+                    layoutManager.scrollToPositionWithOffset(adapter.positionOf(index), dp(48), false);
+                    return;
+                }
+                break;
+            }
+        }
+        layoutManager.scrollToPositionWithOffset(0, 0, true);
+        updatePagedownButton();
+    }
+
+    /** The index in {@link #messages} of the post, or -1. */
+    private int indexOfKey(long k) {
+        for (int i = 0; i < messages.size(); i++) {
+            MessageObject message = messages.get(i);
+            if (!message.isDateObject && message.contentType != 2 && key(-message.getDialogId(), message.getId()) == k) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** The index in {@link #messages} of the oldest post from the date on, or -1. */
+    private int indexAtDate(int date) {
+        int found = -1;
+        for (int i = 0; i < messages.size(); i++) {
+            MessageObject message = messages.get(i);
+            if (message.isDateObject || message.contentType == 2) {
+                continue;
+            }
+            if (message.messageOwner.date < date) {
+                break;
+            }
+            found = i;
+        }
+        return found;
+    }
+
+    /** Throws the loaded history away and shows the newest posts. */
+    private void resetToNewest() {
+        startOpening(TARGET_BOTTOM, 0, 0);
+        loadNewest();
     }
 
     private boolean anyHasNewer() {
@@ -1231,19 +1515,8 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         return false;
     }
 
-    /** The date above which posts wait for the channels that still have newer history to load. */
-    private int displayCeiling() {
-        int ceiling = Integer.MAX_VALUE;
-        for (ChannelState state : channels.values()) {
-            if (state.hasNewer && state.loadedOnce) {
-                ceiling = Math.min(ceiling, state.maxDate);
-            }
-        }
-        return ceiling;
-    }
-
     private void checkLoadNewer() {
-        if (layoutManager == null || adapter.getItemCount() == 0 || !anyHasNewer()) {
+        if (opening || layoutManager == null || adapter.getItemCount() == 0 || !anyHasNewer()) {
             return;
         }
         if (layoutManager.findFirstVisibleItemPosition() > 8) {
@@ -1253,13 +1526,12 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
     }
 
     private void loadNewer() {
-        int ceiling = displayCeiling();
+        int ceiling = FeedWindow.ceiling(channels.values());
         for (ChannelState state : channels.values()) {
-            if (state.loading || !state.hasNewer || !state.loadedOnce || state.maxDate > ceiling) {
+            if (state.loading || !state.hasNewer || !state.loaded || state.maxDate > ceiling) {
                 continue;
             }
-            state.loading = true;
-            getMessagesController().loadMessages(-state.channelId, 0, false, OLDER_COUNT, state.maxId, 0, false, 0, state.classGuid, 1, 0, ChatActivity.MODE_DEFAULT, 0, 0, state.loadIndex++, false);
+            send(state, REQ_NEWER, false);
         }
     }
 
@@ -1303,15 +1575,6 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
 
     // ---------------------------------------------------------------- loading
 
-    private void loadInitial() {
-        for (ChannelState state : channels.values()) {
-            if (!state.loading && !state.loadedOnce) {
-                state.loading = true;
-                getMessagesController().loadMessages(-state.channelId, 0, false, INITIAL_COUNT, 0, 0, true, 0, state.classGuid, 2, 0, ChatActivity.MODE_DEFAULT, 0, 0, state.loadIndex++, false);
-            }
-        }
-    }
-
     private boolean anyLoading() {
         for (ChannelState state : channels.values()) {
             if (state.loading) {
@@ -1323,26 +1586,15 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
 
     private boolean allEnded() {
         for (ChannelState state : channels.values()) {
-            if (!state.endReached) {
+            if (!state.olderEnd) {
                 return false;
             }
         }
         return true;
     }
 
-    /** The date below which posts wait for the channels that still have history to load. */
-    private int displayFloor() {
-        int floor = 0;
-        for (ChannelState state : channels.values()) {
-            if (!state.endReached && state.loadedOnce) {
-                floor = Math.max(floor, state.minDate);
-            }
-        }
-        return floor;
-    }
-
     private void checkLoadOlder() {
-        if (layoutManager == null || adapter.getItemCount() == 0) {
+        if (opening || layoutManager == null || adapter.getItemCount() == 0) {
             return;
         }
         if (layoutManager.findLastVisibleItemPosition() < adapter.getItemCount() - 8) {
@@ -1352,107 +1604,165 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
     }
 
     private void loadOlder() {
-        int floor = displayFloor();
+        int floor = FeedWindow.floor(channels.values());
         for (ChannelState state : channels.values()) {
-            if (state.loading || state.endReached || !state.loadedOnce) {
+            if (state.loading || state.olderEnd || !state.loaded || state.minDate > floor) {
                 continue;
             }
-            if (state.minDate > floor) {
-                continue;
-            }
-            state.loading = true;
-            getMessagesController().loadMessages(-state.channelId, 0, false, OLDER_COUNT, state.minId, 0, !state.cacheEnd, state.minDate, state.classGuid, 0, 0, ChatActivity.MODE_DEFAULT, 0, 0, state.loadIndex++, false);
+            send(state, REQ_OLDER, !state.cacheEnd);
         }
+    }
+
+    /** Loads a channel that joined the feed while it is open, around the posts on the screen. */
+    private void loadJoined(ChannelState state) {
+        if (opening) {
+            if (!probing) {
+                // probing: it loads around the oldest unread post with the others
+                state.aroundDate = anchorDate;
+                send(state, anchorDate == 0 ? REQ_NEWEST : REQ_AROUND, true);
+            }
+            return;
+        }
+        int date = isAtBottom() ? 0 : visibleDate();
+        state.aroundDate = date;
+        send(state, date == 0 ? REQ_NEWEST : REQ_AROUND, true);
+    }
+
+    /** The date of a post on the screen, or 0. */
+    private int visibleDate() {
+        if (listView == null) {
+            return 0;
+        }
+        for (int i = 0; i < listView.getChildCount(); i++) {
+            View child = listView.getChildAt(i);
+            if (child instanceof ChatMessageCell && ((ChatMessageCell) child).getMessageObject() != null) {
+                return ((ChatMessageCell) child).getMessageObject().messageOwner.date;
+            }
+        }
+        return 0;
+    }
+
+    private ChannelState stateOf(int classGuid) {
+        for (ChannelState state : channels.values()) {
+            if (state.classGuid == classGuid) {
+                return state;
+            }
+        }
+        return null;
+    }
+
+    /** Takes a loaded page into the channel's run, or asks the server when the cache had nothing to give. */
+    private void onLoaded(ChannelState state, ArrayList<MessageObject> objects, boolean isCache, boolean isEnd) {
+        TLRPC.Dialog dialog = getMessagesController().getDialog(-state.channelId);
+        int request = state.request;
+        if (isCache && objects.isEmpty() && !isEnd) {
+            send(state, request, false);
+            return;
+        }
+        if (request == REQ_NEWEST && isCache && dialog != null) {
+            int newest = 0;
+            for (MessageObject message : objects) {
+                newest = Math.max(newest, message.getId());
+            }
+            if (newest < dialog.top_message) {
+                // the cache stops short of the channel's newest post; the server's newest posts leave no gap
+                send(state, request, false);
+                return;
+            }
+        }
+        state.loading = false;
+        state.loaded = true;
+        int readMax = dialog != null ? dialog.read_inbox_max_id : Integer.MAX_VALUE;
+        int firstUnread = 0;
+        for (MessageObject message : objects) {
+            if (message.isDateObject || message.getId() <= 0) {
+                continue;
+            }
+            int id = message.getId();
+            int date = message.messageOwner.date;
+            state.minId = Math.min(state.minId, id);
+            state.maxId = Math.max(state.maxId, id);
+            state.include(date);
+            long k = key(state.channelId, id);
+            if (!posts.containsKey(k)) {
+                message.forceAvatar = true;
+                posts.put(k, message);
+            }
+            if (request == REQ_UNREAD && id > readMax && !message.isOut() && (firstUnread == 0 || id < firstUnread)) {
+                firstUnread = id;
+                state.firstUnreadDate = date;
+            }
+        }
+        boolean newerOnServer = dialog == null || state.maxId < dialog.top_message;
+        switch (request) {
+            case REQ_NEWEST:
+                state.hasNewer = false;
+                break;
+            case REQ_UNREAD:
+            case REQ_AROUND:
+                state.hasNewer = newerOnServer;
+                break;
+            case REQ_NEWER:
+                state.hasNewer = objects.size() >= OLDER_COUNT && newerOnServer;
+                break;
+            case REQ_OLDER:
+                if (isCache) {
+                    if (isEnd || objects.size() < OLDER_COUNT) {
+                        state.cacheEnd = true;
+                    }
+                } else if (objects.isEmpty()) {
+                    state.olderEnd = true;
+                }
+                break;
+        }
+        state.settle();
+    }
+
+    /** A channel's page is in: the opening moves on, or the rows take it. */
+    private void afterLoad() {
+        if (opening) {
+            checkOpened();
+            return;
+        }
+        rebuildRows();
+        AndroidUtilities.runOnUIThread(() -> {
+            checkLoadOlder();
+            checkLoadNewer();
+        });
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
         if (id == NotificationCenter.messagesDidLoad) {
-            int classGuid = (Integer) args[10];
-            ChannelState state = null;
-            for (ChannelState s : channels.values()) {
-                if (s.classGuid == classGuid) {
-                    state = s;
-                    break;
-                }
-            }
-            if (state == null) {
+            ChannelState state = stateOf((Integer) args[10]);
+            if (state == null || !state.loading || (Integer) args[11] != state.requestIndex) {
                 return;
             }
-            ArrayList<MessageObject> objects = (ArrayList<MessageObject>) args[2];
-            boolean isCache = (Boolean) args[3];
-            boolean isEnd = (Boolean) args[9];
-            int loadType = (Integer) args[8];
+            onLoaded(state, (ArrayList<MessageObject>) args[2], (Boolean) args[3], (Boolean) args[9]);
+            if (!state.loading) {
+                afterLoad();
+            }
+        } else if (id == NotificationCenter.loadingMessagesFailed) {
+            ChannelState state = stateOf((Integer) args[0]);
+            if (state == null || !state.loading) {
+                return;
+            }
+            // Nothing more comes from this channel; the others go on without waiting for it.
             state.loading = false;
-            state.loadedOnce = true;
-            boolean added = false;
-            for (MessageObject message : objects) {
-                if (message.isDateObject || message.getId() <= 0) {
-                    continue;
-                }
-                state.minId = Math.min(state.minId, message.getId());
-                state.minDate = Math.min(state.minDate, message.messageOwner.date);
-                state.maxId = Math.max(state.maxId, message.getId());
-                state.maxDate = Math.max(state.maxDate, message.messageOwner.date);
-                if (!posts.containsKey(key(state.channelId, message.getId()))) {
-                    message.forceAvatar = true;
-                    posts.put(key(state.channelId, message.getId()), message);
-                    added = true;
-                }
-            }
-            if (loadType == 4) {
-                if (objects.size() < INITIAL_COUNT) {
-                    state.endReached = true;
-                    state.hasNewer = false;
-                }
-            } else if (loadType == 1) {
-                if (objects.size() < OLDER_COUNT) {
-                    state.hasNewer = false;
-                }
-            } else if (isCache) {
-                if (isEnd || objects.size() < (loadType == 2 ? INITIAL_COUNT : OLDER_COUNT)) {
-                    state.cacheEnd = true;
-                }
-                if (objects.isEmpty() && !isEnd) {
-                    state.loading = true;
-                    getMessagesController().loadMessages(-state.channelId, 0, false, loadType == 2 ? INITIAL_COUNT : OLDER_COUNT, loadType == 2 ? 0 : state.minId, 0, false, loadType == 2 ? 0 : state.minDate, state.classGuid, loadType, 0, ChatActivity.MODE_DEFAULT, 0, 0, state.loadIndex++, false);
-                    return;
-                }
-            } else if (isEnd || objects.isEmpty()) {
-                state.endReached = true;
-            }
-            rebuildRows();
-            if (!restoredPosition) {
-                restorePosition();
-            }
-            if (scrollToBottomOnLoad) {
-                scrollToBottomOnLoad = false;
-                scrollToBottom();
-            }
-            if (pendingJumpKey != 0) {
-                if (scrollToKey(pendingJumpKey)) {
-                    pendingJumpKey = 0;
-                } else if (!anyLoading()) {
-                    MessageObject target = posts.get(pendingJumpKey);
-                    pendingJumpKey = 0;
-                    if (target != null) {
-                        openChannel(getMessagesController().getChat(-target.getDialogId()), target.getId());
-                    }
-                }
-            }
-            AndroidUtilities.runOnUIThread(() -> {
-                checkLoadOlder();
-                checkLoadNewer();
-            });
+            state.loaded = true;
+            state.olderEnd = true;
+            state.hasNewer = false;
+            afterLoad();
         } else if (id == NotificationCenter.didReceiveNewMessages) {
             long dialogId = (Long) args[0];
             boolean scheduled = args.length > 2 && args[2] instanceof Boolean && (Boolean) args[2];
             ChannelState state = channels.get(-dialogId);
-            if (state == null || scheduled || state.hasNewer) {
+            // A new post joins a run that reaches the newest post; a channel with newer history left to load gets it with that.
+            if (state == null || scheduled || !(state.loaded && !state.hasNewer || state.loading && state.request == REQ_NEWEST)) {
                 return;
             }
-            boolean atBottom = isAtBottom();
+            boolean atBottom = !opening && isAtBottom();
             ArrayList<MessageObject> objects = (ArrayList<MessageObject>) args[1];
             boolean added = false;
             for (MessageObject message : objects) {
@@ -1463,10 +1773,13 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                 if (!posts.containsKey(k)) {
                     message.forceAvatar = true;
                     posts.put(k, message);
+                    state.minId = Math.min(state.minId, message.getId());
+                    state.maxId = Math.max(state.maxId, message.getId());
+                    state.include(message.messageOwner.date);
                     added = true;
                 }
             }
-            if (added) {
+            if (added && !opening) {
                 rebuildRows();
                 if (atBottom) {
                     scrollToBottom();
@@ -1519,27 +1832,26 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             feed = updated;
             updateTitle();
             expanded.clear();
-            boolean changed = false;
+            ArrayList<ChannelState> joined = new ArrayList<>();
             for (long channelId : feed.channelIds) {
                 if (!channels.containsKey(channelId)) {
-                    channels.put(channelId, new ChannelState(channelId));
-                    changed = true;
+                    ChannelState state = new ChannelState(channelId);
+                    channels.put(channelId, state);
+                    joined.add(state);
                 }
             }
+            boolean left = false;
             for (Long channelId : new ArrayList<>(channels.keySet())) {
                 if (!feed.hasChannel(channelId)) {
-                    ChannelState state = channels.remove(channelId);
-                    getConnectionsManager().cancelRequestsForGuid(state.classGuid);
-                    for (Long k : new ArrayList<>(posts.keySet())) {
-                        if ((k >> 32) == channelId) {
-                            posts.remove(k);
-                        }
-                    }
-                    changed = true;
+                    reset(channels.remove(channelId));
+                    left = true;
                 }
             }
-            if (changed) {
-                loadInitial();
+            for (ChannelState state : joined) {
+                loadJoined(state);
+            }
+            if (left && opening) {
+                checkOpened();
             }
             if (isPaused) {
                 // Under the feed's editor: rebuilt once when the timeline shows again, not on every change.
@@ -1569,9 +1881,38 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
     }
 
     private void rebuildRows() {
+        if (opening) {
+            // the rows wait for every channel, under the progress
+            messages.clear();
+            groups.clear();
+            hidden.clear();
+            minimized.clear();
+            summaries.clear();
+            if (adapter != null) {
+                adapter.updateRows();
+                adapter.notifyDataSetChanged();
+            }
+            updateEmptyView();
+            updatePagedownButton();
+            return;
+        }
+        // The row on the screen stays where it is when rows come or go below or above it.
+        long keepId = 0;
+        int keepTop = 0;
+        if (listView != null && !messages.isEmpty()) {
+            for (int i = 0; i < listView.getChildCount(); i++) {
+                View child = listView.getChildAt(i);
+                RecyclerView.ViewHolder holder = listView.getChildViewHolder(child);
+                if (holder != null && holder.getItemId() >= 2 && holder.getItemId() != 3 && child.getBottom() > listView.getPaddingTop() && child.getTop() < listView.getMeasuredHeight() - listView.getPaddingBottom()) {
+                    keepId = holder.getItemId();
+                    keepTop = child.getTop();
+                    break;
+                }
+            }
+        }
         ArrayList<MessageObject> all = new ArrayList<>(posts.values());
-        int floor = allEnded() ? 0 : displayFloor();
-        int ceiling = displayCeiling();
+        int floor = FeedWindow.floor(channels.values());
+        int ceiling = FeedWindow.ceiling(channels.values());
         ArrayList<MessageObject> shown = new ArrayList<>(all.size());
         for (MessageObject message : all) {
             if (message.messageOwner.date >= floor && message.messageOwner.date <= ceiling) {
@@ -1606,7 +1947,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         if (!unreadDividerDecided && !visible.isEmpty()) {
             boolean anyLoaded = false;
             for (ChannelState state : channels.values()) {
-                anyLoaded |= state.loadedOnce;
+                anyLoaded |= state.loaded;
             }
             if (anyLoaded) {
                 for (int i = visible.size() - 1; i >= 0; i--) {
@@ -1651,8 +1992,18 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             messages.add(dateRow(currentDayStart, currentDay));
         }
 
-        adapter.updateRows();
-        adapter.notifyDataSetChanged();
+        if (adapter != null) {
+            adapter.updateRows();
+            adapter.notifyDataSetChanged();
+            if (keepId != 0 && layoutManager != null) {
+                for (int i = 0; i < messages.size(); i++) {
+                    if (messages.get(i).stableId == keepId) {
+                        layoutManager.scrollToPositionWithOffset(adapter.positionOf(i), keepTop - listView.getPaddingTop(), false);
+                        break;
+                    }
+                }
+            }
+        }
         updateEmptyView();
         updatePagedownButton();
     }
@@ -1793,13 +2144,16 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
     }
 
     private void updateEmptyView() {
+        if (progressView != null) {
+            progressView.setVisibility(opening && !feed.channelIds.isEmpty() ? View.VISIBLE : View.GONE);
+        }
         if (emptyView == null) {
             return;
         }
         if (feed.channelIds.isEmpty()) {
             emptyView.setText(LocaleController.getString(R.string.TgfeedNoChannelsInFeed));
             emptyView.setVisibility(View.VISIBLE);
-        } else if (messages.isEmpty() && allEnded()) {
+        } else if (!opening && messages.isEmpty() && allEnded()) {
             emptyView.setText(LocaleController.getString(hidden.isEmpty() ? R.string.TgfeedNoPosts : R.string.TgfeedNoPostsPassFilter));
             emptyView.setVisibility(View.VISIBLE);
         } else {
@@ -1852,44 +2206,11 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         if (pagedownButton == null) {
             return;
         }
-        boolean show = !isAtBottom();
+        boolean show = !opening && !isAtBottom();
         if (show != (pagedownButton.getVisibility() == View.VISIBLE)) {
             pagedownButton.setVisibility(show ? View.VISIBLE : View.INVISIBLE);
         }
         pagedownCounter.setCount(org.unofficial.telegramfeed.feeds.FeedCounts.getInstance(currentAccount).unreadPosts(feed), true);
-    }
-
-    private void restorePosition() {
-        if (messages.isEmpty() || layoutManager == null) {
-            return;
-        }
-        restoredPosition = true;
-        SharedPreferences preferences = ApplicationLoader.applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE);
-        String saved = preferences.getString(positionKey(), null);
-        if (saved != null) {
-            String[] parts = saved.split(":");
-            if (parts.length == 3) {
-                try {
-                    long savedKey = key(Long.parseLong(parts[0]), Integer.parseInt(parts[1]));
-                    int offset = Integer.parseInt(parts[2]);
-                    for (int i = 0; i < messages.size(); i++) {
-                        MessageObject message = messages.get(i);
-                        if (!message.isDateObject && message.contentType != 2 && key(-message.getDialogId(), message.getId()) == savedKey) {
-                            layoutManager.scrollToPositionWithOffset(adapter.positionOf(i), offset, false);
-                            return;
-                        }
-                    }
-                } catch (NumberFormatException ignore) {
-                }
-            }
-        }
-        int divider = unreadDividerPosition();
-        if (divider >= 0) {
-            unreadDividerSeen = true;
-            layoutManager.scrollToPositionWithOffset(divider, dp(48), false);
-        } else {
-            scrollToBottom();
-        }
     }
 
     private String positionKey() {
@@ -1910,7 +2231,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             if (child instanceof ChatMessageCell) {
                 MessageObject message = ((ChatMessageCell) child).getMessageObject();
                 if (message != null) {
-                    editor.putString(positionKey(), (-message.getDialogId()) + ":" + message.getId() + ":" + (child.getTop() - listView.getPaddingTop())).apply();
+                    editor.putString(positionKey(), (-message.getDialogId()) + ":" + message.getId() + ":" + (child.getTop() - listView.getPaddingTop()) + ":" + message.messageOwner.date).apply();
                     return;
                 }
             }
@@ -2296,7 +2617,8 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             rowCount += messages.size();
             messagesEndRow = rowCount;
             loadingRow = -1;
-            if (!messages.isEmpty() && !allEnded()) {
+            if (!opening && !feed.channelIds.isEmpty() && !allEnded()) {
+                // with no rows too, when the filter hides all that is loaded, so the list still loads older posts
                 loadingRow = rowCount++;
             }
         }

@@ -13,7 +13,7 @@ The official Telegram app for Android with three additions for people who follow
 | Platform | Android, with the official app's minimum version. Development and testing on an x86_64 emulator. |
 | Accounts | Telegram's accounts. Feeds and rules belong to an account; each logged-in account has its own. |
 | Feeds | The app's own entity per account, not Telegram's folders. A feed is an ordered list of channels the account has joined. Channels only: groups, bots and private chats are never offered. |
-| Feeds tab | Feeds live in a "Feeds" tab in the chat list's tab bar, after "All chats" and before the folders. |
+| Feeds tab | Feeds live in a "Feeds" tab in the chat list's tab bar, after "All chats" and before the folders, listed as the chat list lists chats: newest post first, each feed with the photo of the channel that posted last. |
 | Feed view | One chronological timeline of the posts of all the feed's channels, oldest on top and newest at the bottom, drawn as the official app draws a chat, with every post carrying its channel's name and photo. |
 | Feed filters | A feed can limit what it shows: all posts, only media or only text, which media types, a minimum video length, a minimum text length, and a word condition built like a rule's. What a feed leaves out is gone from it, or stays as one folded line when the feed shows such posts minimized. |
 | Read state | Telegram's own: one read position per channel, shared by every feed, the channel itself and the official app. |
@@ -41,7 +41,7 @@ The primary user follows 20 to 200 Telegram channels (news, niche communities, a
 
 ### Feeds and channels
 
-- The "Feeds" tab lists my feeds: name, how many channels, how many of them have new posts, and the unread count in the accent colour, shortened from a thousand on (1.1K, 73K) as on the tab. Its "New feed" button creates one, empty or with the channels of a Telegram folder (a one-time copy); a drag handle reorders; a row's menu edits the channels, renames, marks the feed read or deletes it, saying how many rules go with it.
+- The "Feeds" tab lists my feeds as the chat list lists chats, the feed with the newest post first. A row is a chat row: the photo of the channel that posted last, the feed's name, the time of that post, the post after its channel's name, and the unread count in the accent colour, shortened from a thousand on (1.1K, 73K) as on the tab. A feed without posts shows its initial and how many channels it has. Its "New feed" button creates one, empty or with the channels of a Telegram folder (a one-time copy); a row's menu edits the channels, renames, marks the feed read or deletes it, saying how many rules go with it.
 - With no feeds yet, the tab says what a feed is and offers to create one.
 - The tab counts the channels with unread posts once, however many feeds hold them. A tap on the tab that is already open scrolls its list to the top.
 - A feed's editor shows its name with a pencil and its ordered channels, each removable with Undo. I add channels from the channels I have joined, with a search box; I tick as many as I want and add them with one press. A checkbox hides the channels that are already in a feed, and the sheet remembers it.
@@ -90,7 +90,7 @@ The primary user follows 20 to 200 Telegram channels (news, niche communities, a
 ## 4. Screens
 
 1. **Chat list**: the official app's, with the "Feeds" tab in its tab bar, the pause button in its action bar, feed tags on channel rows and "Add to feed" in a channel row's long-press menu.
-2. **Feeds tab**: the list of feeds with their counts, "New feed", drag handles and row menus; the empty state.
+2. **Feeds tab**: the feeds as chat rows, newest post first, with their counts, "New feed" and row menus; the empty state.
 3. **Feed editor**: name with a pencil, the ordered channels with remove and Undo, the add-channel sheet, the filter settings.
 4. **Feed timeline**: the posts of the feed's channels drawn with the official app's message cells in the group layout, the "Unread posts" divider, day labels and the floating day, the button to the newest posts, the post menu, selection, the viewer, the search bar with its list and chips.
 5. **Feed info**: the feed's name and channels, its rules, and the shared media tabs over all its channels.

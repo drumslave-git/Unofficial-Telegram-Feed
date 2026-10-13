@@ -132,12 +132,6 @@ public class FeedsController extends BaseController {
         changed();
     }
 
-    public void moveFeed(int from, int to) {
-        Feed.move(feeds, from, to);
-        storage.saveOrder(feeds);
-        changed();
-    }
-
     private void changed() {
         RulesController.getInstance(currentAccount).publish();
         getNotificationCenter().postNotificationName(NotificationCenter.tgfeedFeedsChanged);

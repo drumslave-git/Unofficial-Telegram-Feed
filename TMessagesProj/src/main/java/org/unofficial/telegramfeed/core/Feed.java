@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.ToIntFunction;
 
 /**
  * A feed: an ordered list of channels read as one timeline, with its filter. Feeds belong to
@@ -13,7 +14,7 @@ public final class Feed {
 
     public long id;
     public String name;
-    /** Position in the Feeds tab, 0 first. */
+    /** Creation order, 0 first: the Feeds tab's order among feeds without posts. */
     public int order;
     /** Channel ids (positive, as Telegram's chat ids) in the order the user set; no duplicates. */
     public final List<Long> channelIds = new ArrayList<>();
@@ -80,16 +81,17 @@ public final class Feed {
         channelIds.add(to, channelIds.remove(from));
     }
 
-    /** Moves the feed at {@code from} to {@code to} and renumbers {@link #order} from 0. */
-    public static void move(List<Feed> feeds, int from, int to) {
-        if (from < 0 || from >= feeds.size() || to < 0 || to >= feeds.size() || from == to) {
-            return;
-        }
-        feeds.add(to, feeds.remove(from));
-        renumber(feeds);
+    /**
+     * The feeds as the Feeds tab lists them, as the chat list lists chats: the feed with the
+     * newest post first; feeds without posts last, in their {@link #order}.
+     */
+    public static List<Feed> byNewestPost(List<Feed> feeds, ToIntFunction<Feed> newestPostDate) {
+        List<Feed> out = new ArrayList<>(feeds);
+        Collections.sort(out, Comparator.comparingInt((Feed f) -> -newestPostDate.applyAsInt(f)).thenComparingInt(f -> f.order));
+        return out;
     }
 
-    /** Sorts by {@link #order} and makes the orders 0, 1, 2, ... */
+    /** Makes the orders 0, 1, 2, ... in the list's order. */
     public static void renumber(List<Feed> feeds) {
         for (int i = 0; i < feeds.size(); i++) {
             feeds.get(i).order = i;

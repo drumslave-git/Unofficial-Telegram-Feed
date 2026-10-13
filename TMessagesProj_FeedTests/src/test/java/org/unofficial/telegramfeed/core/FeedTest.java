@@ -48,11 +48,25 @@ public class FeedTest {
     }
 
     @Test
-    public void moveFeedRenumbersOrders() {
-        List<Feed> feeds = new ArrayList<>(Arrays.asList(new Feed(1, "a", 0), new Feed(2, "b", 1), new Feed(3, "c", 2)));
-        Feed.move(feeds, 2, 0);
-        assertEquals(Arrays.asList(3L, 1L, 2L), ids(feeds));
-        assertEquals(Arrays.asList(0, 1, 2), orders(feeds));
+    public void newestPostFirstThenFeedsWithoutPostsInOrder() {
+        Feed a = new Feed(1, "a", 0);
+        Feed b = new Feed(2, "b", 1);
+        Feed c = new Feed(3, "c", 2);
+        Feed d = new Feed(4, "d", 3);
+        List<Feed> feeds = new ArrayList<>(Arrays.asList(a, b, c, d));
+        java.util.Map<Long, Integer> newest = new java.util.HashMap<>();
+        newest.put(1L, 100);
+        newest.put(3L, 300);
+        List<Feed> sorted = Feed.byNewestPost(feeds, f -> newest.getOrDefault(f.id, 0));
+        assertEquals(Arrays.asList(3L, 1L, 2L, 4L), ids(sorted));
+        assertEquals(Arrays.asList(1L, 2L, 3L, 4L), ids(feeds));
+    }
+
+    @Test
+    public void renumberFollowsTheList() {
+        List<Feed> feeds = new ArrayList<>(Arrays.asList(new Feed(1, "a", 5), new Feed(2, "b", 9)));
+        Feed.renumber(feeds);
+        assertEquals(Arrays.asList(0, 1), orders(feeds));
     }
 
     @Test

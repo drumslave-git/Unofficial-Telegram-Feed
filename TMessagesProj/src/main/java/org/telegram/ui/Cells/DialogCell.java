@@ -551,10 +551,41 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
     private int timeLeft;
     private int timeTop;
     private StaticLayout tgfeedTagLayout; // TGFEED: the feeds a channel belongs to, as a tag before the time
+    private boolean tgfeedFeedRow; // TGFEED: a feed of the Feeds tab, drawn over its newest post
+
+    /**
+     * TGFEED: draws the cell as a feed of the Feeds tab: the feed's name over its newest post,
+     * with the post's channel as the photo and before the text, as a group names its sender, and
+     * the feed's unread count shortened (73K). The channel's badges, stories and feed tag are left out.
+     */
+    public void setTgfeedFeed(String name, long channelDialogId, MessageObject post, ArrayList<MessageObject> album, int unread) {
+        tgfeedFeedRow = true;
+        customDialog = null;
+        titleOverride = name;
+        setDialog(channelDialogId, post, album, post.messageOwner.date, false, false);
+        unreadCount = unread;
+        update(0, false);
+    }
+
+    /** TGFEED: draws the cell as a feed of the Feeds tab that has no posts yet: its name, its initial as the photo and {@code text}. */
+    public void setTgfeedEmptyFeed(String name, long feedId, String text) {
+        tgfeedFeedRow = true;
+        titleOverride = null;
+        currentDialogId = 0;
+        message = null;
+        groupMessages = null;
+        chat = null;
+        user = null;
+        CustomDialog dialog = new CustomDialog();
+        dialog.name = name;
+        dialog.id = (int) feedId;
+        dialog.message = text;
+        setDialog(dialog);
+    }
 
     /** TGFEED: the names of the feeds a channel row is tagged with, or null for no tag. */
     private String tgfeedTagText() {
-        if (chat == null || !ChatObject.isChannelAndNotMegaGroup(chat) || !(dialogsType == DialogsActivity.DIALOGS_TYPE_DEFAULT || dialogsType == 7 || dialogsType == 8)) {
+        if (tgfeedFeedRow || chat == null || !ChatObject.isChannelAndNotMegaGroup(chat) || !(dialogsType == DialogsActivity.DIALOGS_TYPE_DEFAULT || dialogsType == 7 || dialogsType == 8)) {
             return null;
         }
         java.util.List<org.unofficial.telegramfeed.core.Feed> feeds = org.unofficial.telegramfeed.feeds.FeedsController.getInstance(currentAccount).getFeedsOfChannel(chat.id);
@@ -1425,7 +1456,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 }
             }
 
-            timeString = LocaleController.stringForMessageListDate(customDialog.date);
+            timeString = tgfeedFeedRow && customDialog.date == 0 ? "" : LocaleController.stringForMessageListDate(customDialog.date); // TGFEED: a feed without posts has no time
 
             if (customDialog.unread_count != 0) {
                 drawCount = true;
@@ -1493,7 +1524,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                     }
                 }
             } else {
-                if (currentDialogFolderId == 0 && !isTopic) {
+                if (currentDialogFolderId == 0 && !isTopic && !tgfeedFeedRow) { // TGFEED: a feed row has no badges of its channel
                     long dialogBotVerificationIcon = 0;
                     if (chat != null) {
                         dialogBotVerificationIcon = DialogObject.getBotVerificationIcon(chat);
@@ -1809,6 +1840,9 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                             String triedMessageName = null;
                             if (!isSavedDialog && user != null && user.self && !message.isOutOwner()) {
                                 triedMessageName = AndroidUtilities.escape(getMessageNameString());
+                            }
+                            if (tgfeedFeedRow && chat != null && chat.title != null) { // TGFEED: a feed row names the post's channel before the text
+                                triedMessageName = AndroidUtilities.escape(chat.title.replace("\n", ""));
                             }
                             if (
                                 isSavedDialog && user != null && !user.self && message != null && message.isOutOwner() ||
@@ -2141,7 +2175,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                         showChecks = false;
                     } else if (unreadCount != 0) {
                         drawCount = true;
-                        countString = String.format("%d", unreadCount);
+                        countString = tgfeedFeedRow ? org.unofficial.telegramfeed.core.CountFormat.shortCount(unreadCount) : String.format("%d", unreadCount); // TGFEED: a feed's count is shortened
                     } else if (markUnread) {
                         drawCount = true;
                         countString = "";
@@ -4771,6 +4805,9 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
                 DrawableUtils.drawCommunityCardDrawable(canvas, Theme.dialogs_communityCardsDrawable,
                     avatarImage.getCenterX(), avatarImage.getCenterY(), dp(48));
                 avatarImage.draw(canvas);
+            } else if (tgfeedFeedRow) { // TGFEED: a feed row's photo has no story ring, so a tap on it opens the feed
+                avatarImage.setImageCoords(storyParams.originalAvatarRect);
+                avatarImage.draw(canvas);
             } else {
                 storyParams.drawHiddenStoriesAsSegments = isShareToStoryCell || currentDialogFolderId != 0;
                 int s = storyParams.forceState;
@@ -6129,7 +6166,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
 
     @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
-        if (rightFragmentOpenedProgress == 0 && !isTopic && !isShareToStoryCell && storyParams.checkOnTouchEvent(ev, this)) {
+        if (rightFragmentOpenedProgress == 0 && !isTopic && !isShareToStoryCell && !tgfeedFeedRow && storyParams.checkOnTouchEvent(ev, this)) { // TGFEED: a feed row opens no stories
             return true;
         }
         return super.onInterceptTouchEvent(ev);
@@ -6137,7 +6174,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
-        if (!isTopic && !isShareToStoryCell && ev.getAction() == MotionEvent.ACTION_UP || ev.getAction() == MotionEvent.ACTION_CANCEL) {
+        if (!tgfeedFeedRow && (!isTopic && !isShareToStoryCell && ev.getAction() == MotionEvent.ACTION_UP || ev.getAction() == MotionEvent.ACTION_CANCEL)) { // TGFEED: a feed row opens no stories
             storyParams.checkOnTouchEvent(ev, this);
         }
         return super.dispatchTouchEvent(ev);
@@ -6145,7 +6182,7 @@ public class DialogCell extends BaseCell implements StoriesListPlaceProvider.Ava
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (rightFragmentOpenedProgress == 0 && !isTopic && !isShareToStoryCell && storyParams.checkOnTouchEvent(event, this)) {
+        if (rightFragmentOpenedProgress == 0 && !isTopic && !isShareToStoryCell && !tgfeedFeedRow && storyParams.checkOnTouchEvent(event, this)) { // TGFEED: a feed row opens no stories
             return true;
         }
         if (delegate == null || delegate.canClickButtonInside()) {

@@ -6,7 +6,6 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.util.TypedValue;
 import android.view.Gravity;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -14,12 +13,12 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
-import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
@@ -28,7 +27,7 @@ import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
-import org.telegram.ui.Cells.ShadowSectionCell;
+import org.telegram.ui.Cells.DialogCell;
 import org.telegram.ui.Cells.TextCell;
 import org.telegram.ui.Components.ItemOptions;
 import org.telegram.ui.Components.LayoutHelper;
@@ -37,29 +36,41 @@ import org.unofficial.telegramfeed.core.Feed;
 import org.unofficial.telegramfeed.feeds.FeedsController;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 /**
- * The Feeds tab of the chat list: the feeds with their counts, a drag handle to reorder, the
- * row menu, "New feed", and the empty state. Lives inside a {@code DialogsActivity.ViewPage}
- * over the dialogs list and takes that list's paddings.
+ * The Feeds tab of the chat list: the feeds drawn as the chat list draws chats, newest post
+ * first, the row menu, "New feed", and the empty state. Lives inside a
+ * {@code DialogsActivity.ViewPage} over the dialogs list and takes that list's paddings.
  */
 public class FeedsTabView extends FrameLayout {
 
     private static final int ROW_FEED = 0;
     private static final int ROW_NEW_FEED = 1;
-    private static final int ROW_SHADOW = 2;
-    private static final int ROW_EMPTY = 3;
+    private static final int ROW_EMPTY = 2;
+
+    /** A feed and its newest post: the last post of whichever of its channels posted last. */
+    private static final class FeedRow {
+        final Feed feed;
+        /** The newest post's channel as a dialog id; 0 while the feed has no post. */
+        long dialogId;
+        /** The newest post, all its parts when it is an album, as the chat list keeps them. */
+        ArrayList<MessageObject> post;
+        int date;
+
+        FeedRow(Feed feed) {
+            this.feed = feed;
+        }
+    }
 
     private final BaseFragment fragment;
     private final int currentAccount;
     private final Theme.ResourcesProvider resourcesProvider;
     private final View dialogsList;
     private final RecyclerListView listView;
-    private final LinearLayoutManager layoutManager;
     private final Adapter adapter;
-    private final ItemTouchHelper itemTouchHelper;
-    private boolean reordering;
+    private final ArrayList<FeedRow> rows = new ArrayList<>();
     private int headerOffset;
     private final NotificationCenter.NotificationCenterDelegate themeObserver = (id, account, args) -> updateColors();
 
@@ -69,12 +80,11 @@ public class FeedsTabView extends FrameLayout {
         this.currentAccount = fragment.getCurrentAccount();
         this.resourcesProvider = resourcesProvider;
         this.dialogsList = dialogsList;
-        setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray, resourcesProvider));
+        setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite, resourcesProvider));
 
         listView = new RecyclerListView(context, resourcesProvider);
         listView.setClipToPadding(false);
-        layoutManager = new LinearLayoutManager(context);
-        listView.setLayoutManager(layoutManager);
+        listView.setLayoutManager(new LinearLayoutManager(context));
         adapter = new Adapter();
         listView.setAdapter(adapter);
         listView.setOnItemClickListener((view, position) -> {
@@ -95,9 +105,8 @@ public class FeedsTabView extends FrameLayout {
             showMenu(view, feed);
             return true;
         });
-        itemTouchHelper = new ItemTouchHelper(new TouchHelperCallback());
-        itemTouchHelper.attachToRecyclerView(listView);
         addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+        buildRows();
     }
 
     private FeedsController controller() {
@@ -118,17 +127,15 @@ public class FeedsTabView extends FrameLayout {
 
     /** Takes a new theme's colours; the rows are made again, since each takes its colours when it is made. */
     private void updateColors() {
-        setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundGray, resourcesProvider));
+        setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite, resourcesProvider));
         listView.setAdapter(null);
         listView.getRecycledViewPool().clear();
         listView.setAdapter(adapter);
     }
 
-    /** Re-reads the feeds and their counts. */
+    /** Re-reads the feeds, their newest posts and their counts. */
     public void update() {
-        if (reordering) {
-            return;
-        }
+        buildRows();
         adapter.notifyDataSetChanged();
     }
 
@@ -162,6 +169,33 @@ public class FeedsTabView extends FrameLayout {
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         updatePadding();
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+    }
+
+    /** The feeds with their newest posts, newest first, as the chat list orders chats. */
+    private void buildRows() {
+        MessagesController messagesController = MessagesController.getInstance(currentAccount);
+        List<Feed> feeds = controller().getFeeds();
+        HashMap<Long, FeedRow> byId = new HashMap<>();
+        for (Feed feed : feeds) {
+            FeedRow row = new FeedRow(feed);
+            for (long channelId : feed.channelIds) {
+                ArrayList<MessageObject> post = messagesController.dialogMessage.get(-channelId);
+                if (post == null || post.isEmpty() || post.get(0).messageOwner == null) {
+                    continue;
+                }
+                int date = post.get(0).messageOwner.date;
+                if (row.post == null || date > row.date) {
+                    row.dialogId = -channelId;
+                    row.post = post;
+                    row.date = date;
+                }
+            }
+            byId.put(feed.id, row);
+        }
+        rows.clear();
+        for (Feed feed : Feed.byNewestPost(feeds, f -> byId.get(f.id).date)) {
+            rows.add(byId.get(feed.id));
+        }
     }
 
     /** The channels of the feed with unread posts the feed shows. */
@@ -273,30 +307,20 @@ public class FeedsTabView extends FrameLayout {
 
     private class Adapter extends RecyclerListView.SelectionAdapter {
 
-        List<Feed> feeds() {
-            return controller().getFeeds();
-        }
-
         int rowType(int position) {
-            List<Feed> feeds = feeds();
-            if (feeds.isEmpty()) {
-                return position == 0 ? ROW_EMPTY : position == 1 ? ROW_NEW_FEED : ROW_SHADOW;
+            if (rows.isEmpty()) {
+                return position == 0 ? ROW_EMPTY : ROW_NEW_FEED;
             }
-            if (position < feeds.size()) {
-                return ROW_FEED;
-            }
-            return position == feeds.size() ? ROW_NEW_FEED : ROW_SHADOW;
+            return position < rows.size() ? ROW_FEED : ROW_NEW_FEED;
         }
 
         Feed feedAt(int position) {
-            List<Feed> feeds = feeds();
-            return position >= 0 && position < feeds.size() ? feeds.get(position) : null;
+            return position >= 0 && position < rows.size() ? rows.get(position).feed : null;
         }
 
         @Override
         public int getItemCount() {
-            List<Feed> feeds = feeds();
-            return feeds.isEmpty() ? 3 : feeds.size() + 2;
+            return rows.isEmpty() ? 2 : rows.size() + 1;
         }
 
         @Override
@@ -316,31 +340,21 @@ public class FeedsTabView extends FrameLayout {
             View view;
             switch (viewType) {
                 case ROW_FEED: {
-                    FeedCell cell = new FeedCell(parent.getContext(), resourcesProvider);
-                    cell.reorderView.setOnTouchListener((v, event) -> {
-                        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                            RecyclerView.ViewHolder holder = listView.getChildViewHolder(cell);
-                            if (holder != null) {
-                                itemTouchHelper.startDrag(holder);
-                            }
-                        }
-                        return false;
-                    });
-                    view = cell;
+                    // The chat list's own row, so a feed looks as a chat does.
+                    view = new DialogCell(null, parent.getContext(), false, false, currentAccount, resourcesProvider);
                     break;
                 }
                 case ROW_NEW_FEED: {
                     TextCell cell = new TextCell(parent.getContext(), resourcesProvider);
-                    cell.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite, resourcesProvider));
                     cell.setColors(Theme.key_windowBackgroundWhiteBlueIcon, Theme.key_windowBackgroundWhiteBlueText4);
                     cell.setTextAndIcon(LocaleController.getString(R.string.TgfeedNewFeed), R.drawable.msg_add, false);
                     view = cell;
                     break;
                 }
-                case ROW_EMPTY: {
+                case ROW_EMPTY:
+                default: {
                     LinearLayout layout = new LinearLayout(parent.getContext());
                     layout.setOrientation(LinearLayout.VERTICAL);
-                    layout.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite, resourcesProvider));
                     layout.setPadding(dp(24), dp(28), dp(24), dp(20));
                     TextView title = new TextView(parent.getContext());
                     title.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
@@ -358,10 +372,6 @@ public class FeedsTabView extends FrameLayout {
                     view = layout;
                     break;
                 }
-                case ROW_SHADOW:
-                default:
-                    view = new ShadowSectionCell(parent.getContext(), resourcesProvider);
-                    break;
             }
             view.setLayoutParams(new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             return new RecyclerListView.Holder(view);
@@ -369,65 +379,18 @@ public class FeedsTabView extends FrameLayout {
 
         @Override
         public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
-            if (holder.getItemViewType() == ROW_FEED) {
-                Feed feed = feedAt(position);
-                if (feed != null) {
-                    int withNew = channelsWithNewPosts(currentAccount, feed);
-                    ((FeedCell) holder.itemView).set(feed.name, feed.channelIds.size(), withNew, SharedConfig.tgfeedCountPosts ? unreadPosts(currentAccount, feed) : withNew, position < feeds().size() - 1);
-                }
+            if (holder.getItemViewType() != ROW_FEED || position >= rows.size()) {
+                return;
             }
-        }
-    }
-
-    private class TouchHelperCallback extends ItemTouchHelper.Callback {
-
-        @Override
-        public boolean isLongPressDragEnabled() {
-            return false;
-        }
-
-        @Override
-        public int getMovementFlags(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder) {
-            if (viewHolder.getItemViewType() != ROW_FEED) {
-                return makeMovementFlags(0, 0);
+            FeedRow row = rows.get(position);
+            DialogCell cell = (DialogCell) holder.itemView;
+            cell.useSeparator = position < rows.size() - 1;
+            if (row.post == null) {
+                cell.setTgfeedEmptyFeed(row.feed.name, row.feed.id, LocaleController.formatPluralString("TgfeedChannels", row.feed.channelIds.size()));
+                return;
             }
-            return makeMovementFlags(ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0);
-        }
-
-        @Override
-        public boolean onMove(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder source, @NonNull RecyclerView.ViewHolder target) {
-            if (source.getItemViewType() != ROW_FEED || target.getItemViewType() != ROW_FEED) {
-                return false;
-            }
-            int from = source.getAdapterPosition();
-            int to = target.getAdapterPosition();
-            reordering = true;
-            controller().moveFeed(from, to);
-            adapter.notifyItemMoved(from, to);
-            return true;
-        }
-
-        @Override
-        public void onSelectedChanged(RecyclerView.ViewHolder viewHolder, int actionState) {
-            if (actionState != ItemTouchHelper.ACTION_STATE_IDLE) {
-                listView.cancelClickRunnables(false);
-                if (viewHolder != null) {
-                    viewHolder.itemView.setPressed(true);
-                }
-            }
-            super.onSelectedChanged(viewHolder, actionState);
-        }
-
-        @Override
-        public void clearView(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder) {
-            super.clearView(recyclerView, viewHolder);
-            viewHolder.itemView.setPressed(false);
-            reordering = false;
-            update();
-        }
-
-        @Override
-        public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+            int unread = SharedConfig.tgfeedCountPosts ? unreadPosts(currentAccount, row.feed) : channelsWithNewPosts(currentAccount, row.feed);
+            cell.setTgfeedFeed(row.feed.name, row.dialogId, row.post.get(0), row.post.size() > 1 ? row.post : null, unread);
         }
     }
 }

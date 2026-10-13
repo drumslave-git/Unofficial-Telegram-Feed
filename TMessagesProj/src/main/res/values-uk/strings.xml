@@ -92,10 +92,6 @@
     <string name="TgfeedChannels_few">%1$d канали</string>
     <string name="TgfeedChannels_many">%1$d каналів</string>
     <string name="TgfeedChannels_other">%1$d каналу</string>
-    <string name="TgfeedChannelsWithNewPosts_one">%1$d з новими дописами</string>
-    <string name="TgfeedChannelsWithNewPosts_few">%1$d з новими дописами</string>
-    <string name="TgfeedChannelsWithNewPosts_many">%1$d з новими дописами</string>
-    <string name="TgfeedChannelsWithNewPosts_other">%1$d з новими дописами</string>
     <string name="TgfeedHideStories">Приховати історії</string>
     <string name="TgfeedRules">Правила</string>
     <string name="TgfeedNewRule">Нове правило</string>

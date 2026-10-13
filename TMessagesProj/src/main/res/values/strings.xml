@@ -86,8 +86,6 @@
     <string name="TgfeedFeedsEmptyText">A feed shows the posts of several channels as one timeline. Create one and add channels to it.</string>
     <string name="TgfeedChannels_one">%1$d channel</string>
     <string name="TgfeedChannels_other">%1$d channels</string>
-    <string name="TgfeedChannelsWithNewPosts_one">%1$d with new posts</string>
-    <string name="TgfeedChannelsWithNewPosts_other">%1$d with new posts</string>
     <string name="TgfeedHideStories">Hide stories</string>
     <string name="TgfeedRules">Rules</string>
     <string name="TgfeedNewRule">New rule</string>

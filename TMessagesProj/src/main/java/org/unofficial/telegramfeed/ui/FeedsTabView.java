@@ -8,6 +8,7 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -73,6 +74,12 @@ public class FeedsTabView extends FrameLayout {
     private final ArrayList<FeedRow> rows = new ArrayList<>();
     private int headerOffset;
     private final NotificationCenter.NotificationCenterDelegate themeObserver = (id, account, args) -> updateColors();
+    /**
+     * The chat list's panels above the list (Telegram's hints, the pause and reading banners)
+     * come and go by measuring the dialogs list alone, so the list's padding is checked before
+     * every frame; a frame with a stale padding is dropped and laid out again.
+     */
+    private final ViewTreeObserver.OnPreDrawListener paddingFollower = () -> getVisibility() != VISIBLE || !updatePadding();
 
     public FeedsTabView(Context context, BaseFragment fragment, View dialogsList, Theme.ResourcesProvider resourcesProvider) {
         super(context);
@@ -117,12 +124,14 @@ public class FeedsTabView extends FrameLayout {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         NotificationCenter.getGlobalInstance().addObserver(themeObserver, NotificationCenter.didSetNewTheme);
+        getViewTreeObserver().addOnPreDrawListener(paddingFollower);
     }
 
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         NotificationCenter.getGlobalInstance().removeObserver(themeObserver, NotificationCenter.didSetNewTheme);
+        getViewTreeObserver().removeOnPreDrawListener(paddingFollower);
     }
 
     /** Takes a new theme's colours; the rows are made again, since each takes its colours when it is made. */
@@ -155,14 +164,17 @@ public class FeedsTabView extends FrameLayout {
         }
     }
 
-    private void updatePadding() {
+    /** Takes the dialogs list's paddings, the top one moved by the header's fold; true when they changed. */
+    private boolean updatePadding() {
         if (dialogsList == null) {
-            return;
+            return false;
         }
         int top = Math.max(0, dialogsList.getPaddingTop() + headerOffset);
         if (listView.getPaddingTop() != top || listView.getPaddingBottom() != dialogsList.getPaddingBottom()) {
             listView.setPadding(0, top, 0, dialogsList.getPaddingBottom());
+            return true;
         }
+        return false;
     }
 
     @Override

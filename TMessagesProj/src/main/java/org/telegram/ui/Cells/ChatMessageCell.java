@@ -6947,7 +6947,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
             isAvatarVisible = needDrawAvatar() && (currentPosition == null || currentPosition.edge);
             boolean drawAvatar = needDrawAvatar();
             if (messageObject.customAvatarDrawable != null || messageObject.forceAvatar || messageObject.messageOwner.guestchat_via_from != null) {
-                isAvatarVisible = true;
+                isAvatarVisible = currentPosition == null || currentPosition.edge; // TGFEED: as in a group, only an album's edge parts keep room for the photo
                 drawAvatar = true;
             }
             wasLayout = false;
@@ -19739,7 +19739,7 @@ public class ChatMessageCell extends BaseCell implements SeekBar.SeekBarDelegate
 
     protected boolean isNeedAuthorName() {
         if (currentMessageObject.forceAvatar || currentMessageObject.getDialogId() == UserObject.VERIFY && currentMessageObject.messageOwner != null && currentMessageObject.messageOwner.fwd_from != null) {
-            return true;
+            return currentPosition == null || (currentPosition.flags & MessageObject.POSITION_FLAG_TOP) != 0; // TGFEED: as in a group, an album names its sender over its top row only
         }
         if (currentMessageObject.isSponsored()) {
             return false;

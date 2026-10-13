@@ -1,5 +1,7 @@
 package org.unofficial.telegramfeed.feeds;
 
+import android.os.SystemClock;
+
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.MessageObject;
@@ -13,6 +15,7 @@ import org.telegram.tgnet.TLRPC;
 import org.unofficial.telegramfeed.core.Feed;
 import org.unofficial.telegramfeed.core.FeedFilter;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -28,7 +31,10 @@ import java.util.Map;
  * newest known one. A feed without a filter counts as Telegram does. Until a channel's posts are
  * in, its count is Telegram's. A feed's count of a channel is kept until the channel's posts or
  * the feed's filter change, since the chat list asks for the counts on every update; fetched posts
- * are described on a background thread. Lives on the UI thread; posts {@link NotificationCenter#tgfeedCountsChanged}.
+ * are described on a background thread. The requests go one at a time with a pause between them
+ * and wait while a feed loads its history ({@link #hold}), since Telegram answers a burst of
+ * history requests with a flood wait that would hold the feed's own requests back for minutes.
+ * Lives on the UI thread; posts {@link NotificationCenter#tgfeedCountsChanged}.
  */
 public class FeedCounts {
 
@@ -44,6 +50,10 @@ public class FeedCounts {
     /** How many unread posts of one channel are looked at; posts past this count as shown. */
     private static final int MAX_CHECKED = 500;
     private static final int PAGE = 100;
+    /** The pause after a request before the next one goes. */
+    private static final int REQUEST_GAP_MS = 500;
+    /** A channel whose count does not add up is fetched whole again at most this often. */
+    private static final long FULL_REFETCH_GAP_MS = 10 * 60 * 1000L;
 
     /** The unread posts of one channel as the filters see them, newest first. */
     private static final class ChannelUnread {
@@ -57,6 +67,8 @@ public class FeedCounts {
         int version;
         /** The state a full fetch was last made for, so a count that never adds up does not fetch again and again. */
         String fullFetchKey;
+        /** When the last full fetch was made ({@code SystemClock.elapsedRealtime}). */
+        long fullFetchTime;
     }
 
     /** A feed's count of one channel, valid while the channel's posts and the feed's filter stay as they were. */
@@ -72,6 +84,11 @@ public class FeedCounts {
     private final HashMap<Long, ChannelUnread> channels = new HashMap<>();
     private final HashMap<String, Judged> judged = new HashMap<>();
     private boolean notifyScheduled;
+    /** The requests waiting to go, one at a time. */
+    private final ArrayDeque<Runnable> requests = new ArrayDeque<>();
+    private boolean requestInFlight;
+    /** How many feeds are loading their history; the requests wait while any is. */
+    private int holds;
 
     private FeedCounts(int account) {
         currentAccount = account;
@@ -79,6 +96,16 @@ public class FeedCounts {
 
     private MessagesController messages() {
         return MessagesController.getInstance(currentAccount);
+    }
+
+    /**
+     * The id up to which the channel is read. {@code markDialogAsRead} moves the dialog's
+     * {@code read_inbox_max_id} only when the server confirms, but its own map at once, so a
+     * read the app made a moment ago counts already.
+     */
+    public static int readMax(int account, TLRPC.Dialog dialog) {
+        Integer marked = MessagesController.getInstance(account).dialogs_read_inbox_max.get(dialog.id);
+        return marked == null ? dialog.read_inbox_max_id : Math.max(dialog.read_inbox_max_id, marked);
     }
 
     /** The unread posts of a channel that the feed shows. */
@@ -198,26 +225,28 @@ public class FeedCounts {
         if (state.loading) {
             return state;
         }
-        if (!state.loadedOnce || dialog.read_inbox_max_id < state.readMax) {
+        int read = readMax(currentAccount, dialog);
+        if (!state.loadedOnce || read < state.readMax) {
             fetch(channelId, state, dialog, true);
             return state;
         }
-        if (dialog.read_inbox_max_id > state.readMax) {
+        if (read > state.readMax) {
             for (int i = state.ids.size() - 1; i >= 0; i--) {
-                if (state.ids.get(i) <= dialog.read_inbox_max_id) {
+                if (state.ids.get(i) <= read) {
                     state.ids.remove(i);
                     state.posts.remove(i);
                 }
             }
-            state.readMax = dialog.read_inbox_max_id;
+            state.readMax = read;
             state.version++;
         }
         if (dialog.top_message > state.topMessage) {
             fetch(channelId, state, dialog, false);
             return state;
         }
-        String key = dialog.read_inbox_max_id + "_" + dialog.top_message + "_" + dialog.unread_count;
-        if (state.posts.size() < Math.min(dialog.unread_count, MAX_CHECKED) && !key.equals(state.fullFetchKey)) {
+        String key = read + "_" + dialog.top_message + "_" + dialog.unread_count;
+        if (state.posts.size() < Math.min(dialog.unread_count, MAX_CHECKED) && !key.equals(state.fullFetchKey)
+                && SystemClock.elapsedRealtime() - state.fullFetchTime > FULL_REFETCH_GAP_MS) {
             fetch(channelId, state, dialog, true);
         }
         return state;
@@ -229,12 +258,13 @@ public class FeedCounts {
             return;
         }
         state.loading = true;
-        final int readMax = dialog.read_inbox_max_id;
+        final int readMax = readMax(currentAccount, dialog);
         final int top = dialog.top_message;
         final int minId = full ? readMax : Math.max(readMax, state.topMessage);
         final int wanted = Math.min(full ? dialog.unread_count : Math.max(1, top - minId), MAX_CHECKED);
         if (full) {
-            state.fullFetchKey = dialog.read_inbox_max_id + "_" + dialog.top_message + "_" + dialog.unread_count;
+            state.fullFetchKey = readMax + "_" + dialog.top_message + "_" + dialog.unread_count;
+            state.fullFetchTime = SystemClock.elapsedRealtime();
         }
         List<TLRPC.Message> collected = new ArrayList<>();
         loadPage(peer, minId, 0, wanted, collected, () -> Utilities.globalQueue.postRunnable(() -> {
@@ -275,12 +305,17 @@ public class FeedCounts {
     }
 
     private void loadPage(TLRPC.InputPeer peer, int minId, int offsetId, int wanted, List<TLRPC.Message> collected, Runnable done) {
+        enqueue(() -> sendPage(peer, minId, offsetId, wanted, collected, done));
+    }
+
+    private void sendPage(TLRPC.InputPeer peer, int minId, int offsetId, int wanted, List<TLRPC.Message> collected, Runnable done) {
         TLRPC.TL_messages_getHistory req = new TLRPC.TL_messages_getHistory();
         req.peer = peer;
         req.min_id = minId;
         req.offset_id = offsetId;
         req.limit = Math.min(PAGE, Math.max(1, wanted - collected.size()));
         ConnectionsManager.getInstance(currentAccount).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+            requestDone();
             if (!(response instanceof TLRPC.messages_Messages)) {
                 if (error != null) {
                     FileLog.e("tgfeed counts: " + error.text);
@@ -305,6 +340,38 @@ public class FeedCounts {
         }));
     }
 
+    /** A feed starts loading its history; the counts' requests wait until it {@link #release}s them. */
+    public void hold() {
+        holds++;
+    }
+
+    public void release() {
+        if (holds > 0) {
+            holds--;
+        }
+        pump();
+    }
+
+    private void enqueue(Runnable request) {
+        requests.add(request);
+        pump();
+    }
+
+    private void pump() {
+        if (requestInFlight || holds > 0 || requests.isEmpty()) {
+            return;
+        }
+        requestInFlight = true;
+        requests.poll().run();
+    }
+
+    private void requestDone() {
+        AndroidUtilities.runOnUIThread(() -> {
+            requestInFlight = false;
+            pump();
+        }, REQUEST_GAP_MS);
+    }
+
     private void scheduleNotify() {
         if (notifyScheduled) {
             return;
@@ -320,5 +387,6 @@ public class FeedCounts {
     public void cleanup() {
         channels.clear();
         judged.clear();
+        requests.clear();
     }
 }

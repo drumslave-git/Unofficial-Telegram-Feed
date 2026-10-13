@@ -73,6 +73,7 @@ import org.unofficial.telegramfeed.core.Feed;
 import org.unofficial.telegramfeed.core.FeedOrder;
 import org.unofficial.telegramfeed.core.FeedFilter;
 import org.unofficial.telegramfeed.core.FeedWindow;
+import org.unofficial.telegramfeed.feeds.FeedCounts;
 import org.unofficial.telegramfeed.feeds.FeedSearch;
 import org.unofficial.telegramfeed.feeds.FeedsController;
 import org.unofficial.telegramfeed.feeds.PostFilter;
@@ -133,10 +134,10 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         int aroundDate;
         boolean loading;
         boolean cacheEnd;
-        int minId = Integer.MAX_VALUE;
-        int maxId;
         /** The date of the channel's oldest unread post, from a {@link #REQ_UNREAD} load; 0 for none. */
         int firstUnreadDate;
+        /** How many times in a row the request in flight failed. */
+        int failures;
 
         ChannelState(long channelId) {
             this.channelId = channelId;
@@ -147,9 +148,8 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             forget();
             loading = false;
             cacheEnd = false;
-            minId = Integer.MAX_VALUE;
-            maxId = 0;
             firstUnreadDate = 0;
+            failures = 0;
         }
     }
 
@@ -192,6 +192,9 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
     private int anchorDate;
     /** The feed opened before its list was made; the list goes to its place when it is. */
     private boolean positionPending;
+    /** The feed's counts wait with their requests while the timeline loads its history ({@link FeedCounts#hold}). */
+    private boolean holdingCounts;
+    private boolean destroyed;
     private View progressView;
 
     private SizeNotifierFrameLayout contentView;
@@ -309,7 +312,12 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
 
     @Override
     public void onFragmentDestroy() {
+        destroyed = true;
         savePosition();
+        if (holdingCounts) {
+            holdingCounts = false;
+            FeedCounts.getInstance(currentAccount).release();
+        }
         getNotificationCenter().removeObserver(this, NotificationCenter.messagesDidLoad);
         getNotificationCenter().removeObserver(this, NotificationCenter.loadingMessagesFailed);
         getNotificationCenter().removeObserver(this, NotificationCenter.didReceiveNewMessages);
@@ -337,6 +345,31 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         if (rowsStale) {
             rowsStale = false;
             rebuildRows();
+        }
+    }
+
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // A turn of the screen, as a video goes full screen and back: the rows are made again.
+        // An album keeps the width of its caption from the cell that laid it out
+        // (GroupedMessages.cachedWidthForCaption) and the list keeps the offsets that join its
+        // parts until a row is bound, so an album bound at the other width would keep its sizes.
+        if (adapter != null && !opening) {
+            rebuildRows();
+        }
+    }
+
+    /** While any channel loads, the feed's counts hold their requests back, so the timeline's own requests go first. */
+    private void updateCountsHold() {
+        boolean hold = !destroyed && anyLoading();
+        if (hold != holdingCounts) {
+            holdingCounts = hold;
+            if (hold) {
+                FeedCounts.getInstance(currentAccount).hold();
+            } else {
+                FeedCounts.getInstance(currentAccount).release();
+            }
         }
     }
 
@@ -1271,10 +1304,10 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             }
         }
         ArrayList<ChannelState> unread = new ArrayList<>();
-        org.unofficial.telegramfeed.feeds.FeedCounts counts = org.unofficial.telegramfeed.feeds.FeedCounts.getInstance(currentAccount);
+        FeedCounts counts = FeedCounts.getInstance(currentAccount);
         for (ChannelState state : channels.values()) {
             TLRPC.Dialog dialog = getMessagesController().getDialog(-state.channelId);
-            if (dialog != null && dialog.read_inbox_max_id < dialog.top_message && counts.visibleUnread(feed, state.channelId) > 0) {
+            if (dialog != null && FeedCounts.readMax(currentAccount, dialog) < dialog.top_message && counts.visibleUnread(feed, state.channelId) > 0) {
                 unread.add(state);
             }
         }
@@ -1331,6 +1364,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         getConnectionsManager().cancelRequestsForGuid(state.classGuid);
         state.reset();
         state.requestIndex = -1;
+        updateCountsHold();
         for (Long k : new ArrayList<>(posts.keySet())) {
             if ((k >> 32) == state.channelId) {
                 posts.remove(k);
@@ -1351,7 +1385,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             case REQ_UNREAD: {
                 // The cache finds the oldest unread post itself; the server is asked around the post after the read mark.
                 TLRPC.Dialog dialog = getMessagesController().getDialog(dialogId);
-                int maxId = fromCache || dialog == null ? 0 : dialog.read_inbox_max_id + 1;
+                int maxId = fromCache || dialog == null ? 0 : FeedCounts.readMax(currentAccount, dialog) + 1;
                 getMessagesController().loadMessages(dialogId, 0, false, INITIAL_COUNT, maxId, 0, fromCache, 0, state.classGuid, 2, 0, ChatActivity.MODE_DEFAULT, 0, 0, state.requestIndex, false);
                 break;
             }
@@ -1366,6 +1400,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                 getMessagesController().loadMessages(dialogId, 0, false, OLDER_COUNT, state.maxId, 0, false, 0, state.classGuid, 1, 0, ChatActivity.MODE_DEFAULT, 0, 0, state.requestIndex, false);
                 break;
         }
+        updateCountsHold();
     }
 
     /**
@@ -1672,17 +1707,17 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         }
         state.loading = false;
         state.loaded = true;
-        int readMax = dialog != null ? dialog.read_inbox_max_id : Integer.MAX_VALUE;
+        state.failures = 0;
+        int readMax = dialog != null ? FeedCounts.readMax(currentAccount, dialog) : Integer.MAX_VALUE;
         int firstUnread = 0;
+        int previousMax = state.maxId;
         for (MessageObject message : objects) {
             if (message.isDateObject || message.getId() <= 0) {
                 continue;
             }
             int id = message.getId();
             int date = message.messageOwner.date;
-            state.minId = Math.min(state.minId, id);
-            state.maxId = Math.max(state.maxId, id);
-            state.include(date);
+            state.include(id, date);
             long k = key(state.channelId, id);
             if (!posts.containsKey(k)) {
                 message.forceAvatar = true;
@@ -1693,18 +1728,17 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                 state.firstUnreadDate = date;
             }
         }
-        boolean newerOnServer = dialog == null || state.maxId < dialog.top_message;
+        // Whether newer posts exist is judged by the ids against the channel's newest post, never by the size of a page.
+        if (request != REQ_OLDER) {
+            if (request == REQ_NEWER && state.maxId <= previousMax) {
+                state.hasNewer = false; // the server has nothing newer
+            } else if (dialog != null) {
+                state.reach(dialog.top_message);
+            } else {
+                state.hasNewer = request != REQ_NEWEST;
+            }
+        }
         switch (request) {
-            case REQ_NEWEST:
-                state.hasNewer = false;
-                break;
-            case REQ_UNREAD:
-            case REQ_AROUND:
-                state.hasNewer = newerOnServer;
-                break;
-            case REQ_NEWER:
-                state.hasNewer = objects.size() >= OLDER_COUNT && newerOnServer;
-                break;
             case REQ_OLDER:
                 if (isCache) {
                     if (isEnd || objects.size() < OLDER_COUNT) {
@@ -1715,11 +1749,42 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                 }
                 break;
         }
-        state.settle();
+        state.settle(dialog == null || dialog.top_message > 0);
+    }
+
+    /**
+     * A request of the channel failed. It is sent again after 2, 4 and 8 seconds; after that the
+     * channel is left as it is, so that a failure never makes a run look complete: a channel
+     * without a run is left out, a run keeps waiting for its newer posts (asked for again as the
+     * list scrolls), and only older history that cannot be loaded counts as ended.
+     */
+    private void onLoadFailed(ChannelState state) {
+        int request = state.request;
+        int index = state.requestIndex;
+        if (state.failures < 3) {
+            state.failures++;
+            AndroidUtilities.runOnUIThread(() -> {
+                if (!destroyed && state.loading && state.requestIndex == index && channels.get(state.channelId) == state) {
+                    send(state, request, false);
+                }
+            }, 2000L << (state.failures - 1));
+            return;
+        }
+        state.failures = 0;
+        state.loading = false;
+        if (!state.loaded || state.minDate == Integer.MAX_VALUE) {
+            state.loaded = false;
+            state.olderEnd = true;
+            state.hasNewer = false;
+        } else if (request == REQ_OLDER) {
+            state.olderEnd = true;
+        }
+        afterLoad();
     }
 
     /** A channel's page is in: the opening moves on, or the rows take it. */
     private void afterLoad() {
+        updateCountsHold();
         if (opening) {
             checkOpened();
             return;
@@ -1748,18 +1813,24 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             if (state == null || !state.loading) {
                 return;
             }
-            // Nothing more comes from this channel; the others go on without waiting for it.
-            state.loading = false;
-            state.loaded = true;
-            state.olderEnd = true;
-            state.hasNewer = false;
-            afterLoad();
+            onLoadFailed(state);
         } else if (id == NotificationCenter.didReceiveNewMessages) {
             long dialogId = (Long) args[0];
             boolean scheduled = args.length > 2 && args[2] instanceof Boolean && (Boolean) args[2];
+            int mode = args.length > 3 && args[3] instanceof Integer ? (Integer) args[3] : 0;
             ChannelState state = channels.get(-dialogId);
-            // A new post joins a run that reaches the newest post; a channel with newer history left to load gets it with that.
-            if (state == null || scheduled || !(state.loaded && !state.hasNewer || state.loading && state.request == REQ_NEWEST)) {
+            if (state == null || scheduled || mode != 0) {
+                return;
+            }
+            // Telegram moves the channel's newest post on only after telling of the new ones, so the
+            // dialog still names the newest post before them: a run that reaches it takes them, any
+            // other run would get a gap and waits for them with its newer history.
+            TLRPC.Dialog dialog = getMessagesController().getDialog(dialogId);
+            boolean joins = state.loading && state.request == REQ_NEWEST || (dialog != null ? state.joinsNew(dialog.top_message) : state.loaded && !state.hasNewer);
+            if (!joins) {
+                if (state.loaded) {
+                    state.hasNewer = true;
+                }
                 return;
             }
             boolean atBottom = !opening && isAtBottom();
@@ -1773,9 +1844,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                 if (!posts.containsKey(k)) {
                     message.forceAvatar = true;
                     posts.put(k, message);
-                    state.minId = Math.min(state.minId, message.getId());
-                    state.maxId = Math.max(state.maxId, message.getId());
-                    state.include(message.messageOwner.date);
+                    state.include(message.getId(), message.messageOwner.date);
                     added = true;
                 }
             }
@@ -1868,7 +1937,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
 
     private boolean isUnread(MessageObject message) {
         TLRPC.Dialog dialog = getMessagesController().getDialog(message.getDialogId());
-        return dialog != null && message.getId() > dialog.read_inbox_max_id;
+        return dialog != null && message.getId() > FeedCounts.readMax(currentAccount, dialog);
     }
 
     private int stableId(long key) {
@@ -2210,7 +2279,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         if (show != (pagedownButton.getVisibility() == View.VISIBLE)) {
             pagedownButton.setVisibility(show ? View.VISIBLE : View.INVISIBLE);
         }
-        pagedownCounter.setCount(org.unofficial.telegramfeed.feeds.FeedCounts.getInstance(currentAccount).unreadPosts(feed), true);
+        pagedownCounter.setCount(FeedCounts.getInstance(currentAccount).unreadPosts(feed), true);
     }
 
     private String positionKey() {
@@ -2271,12 +2340,18 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
 
     /** Marks each channel read up to the newest post of it on the screen. */
     private void markVisibleAsRead() {
-        if (listView == null) {
+        if (listView == null || opening) {
             return;
         }
+        // Only the rows on the screen count, not those the list lays out beyond its edges.
+        int top = listView.getPaddingTop();
+        int bottom = listView.getMeasuredHeight() - listView.getPaddingBottom();
         HashMap<Long, MessageObject> newest = new HashMap<>();
         for (int i = 0; i < listView.getChildCount(); i++) {
             View child = listView.getChildAt(i);
+            if (child.getBottom() <= top || child.getTop() >= bottom) {
+                continue;
+            }
             MessageObject message = null;
             if (child instanceof ChatMessageCell) {
                 message = ((ChatMessageCell) child).getMessageObject();
@@ -2287,6 +2362,10 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                 continue;
             }
             long channelId = -message.getDialogId();
+            ChannelState state = channels.get(channelId);
+            if (state == null || !state.loaded || !posts.containsKey(key(channelId, message.getId()))) {
+                continue;
+            }
             MessageObject current = newest.get(channelId);
             if (current == null || message.getId() > current.getId()) {
                 newest.put(channelId, message);
@@ -2295,12 +2374,15 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         for (MessageObject seen : newest.values()) {
             MessageObject message = readBoundary(seen);
             TLRPC.Dialog dialog = getMessagesController().getDialog(message.getDialogId());
-            if (dialog == null || message.getId() <= dialog.read_inbox_max_id) {
+            // Counted from the read mark of the app's last read, not the server's, which lags:
+            // Telegram takes the count off the channel's unread count each time.
+            int read = dialog == null ? 0 : FeedCounts.readMax(currentAccount, dialog);
+            if (dialog == null || message.getId() <= read) {
                 continue;
             }
             int countDiff = 0;
             for (MessageObject post : posts.values()) {
-                if (post.getDialogId() == message.getDialogId() && post.getId() > dialog.read_inbox_max_id && post.getId() <= message.getId()) {
+                if (post.getDialogId() == message.getDialogId() && post.getId() > read && post.getId() <= message.getId()) {
                     countDiff++;
                 }
             }

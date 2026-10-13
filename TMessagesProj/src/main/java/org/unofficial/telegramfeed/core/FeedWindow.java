@@ -21,19 +21,45 @@ public final class FeedWindow {
         public boolean hasNewer;
         public int minDate = Integer.MAX_VALUE;
         public int maxDate;
+        public int minId = Integer.MAX_VALUE;
+        public int maxId;
 
         /** Widens the run by a loaded post. */
-        public void include(int date) {
+        public void include(int id, int date) {
+            minId = Math.min(minId, id);
+            maxId = Math.max(maxId, id);
             minDate = Math.min(minDate, date);
             maxDate = Math.max(maxDate, date);
         }
 
-        /** A run without posts has nothing beyond it either way. */
-        public void settle() {
-            if (minDate == Integer.MAX_VALUE) {
-                olderEnd = true;
-                hasNewer = false;
+        /** Whether the run reaches the channel's newest post, {@code top} (its message id). */
+        public void reach(int top) {
+            hasNewer = maxId < top;
+        }
+
+        /**
+         * After a page. A channel without any post has an empty run with nothing beyond it; a
+         * page that brought nothing of a channel that has posts leaves the channel out (not
+         * loaded, nothing to wait for) until it loads again, so that none of its newer posts can
+         * join a run that is not there.
+         */
+        public void settle(boolean channelHasPosts) {
+            if (minDate != Integer.MAX_VALUE) {
+                return;
             }
+            if (channelHasPosts) {
+                loaded = false;
+            }
+            olderEnd = true;
+            hasNewer = false;
+        }
+
+        /**
+         * Whether a post that just came joins the run: only when the run reaches the channel's
+         * newest post before it, {@code previousTop}, so a post never lands after a gap.
+         */
+        public boolean joinsNew(int previousTop) {
+            return loaded && maxId >= previousTop;
         }
 
         /** Forgets the run. */
@@ -43,6 +69,8 @@ public final class FeedWindow {
             hasNewer = false;
             minDate = Integer.MAX_VALUE;
             maxDate = 0;
+            minId = Integer.MAX_VALUE;
+            maxId = 0;
         }
 
         /** Whether the run reaches the date on both sides, or the channel has nothing beyond it there. */

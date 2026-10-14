@@ -2651,7 +2651,11 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         BulletinFactory.of(this).createDownloadBulletin(message.isVideo() ? BulletinFactory.FileType.VIDEO : BulletinFactory.FileType.PHOTO, getResourceProvider()).show();
     }
 
-    /** Opens the viewer at the post, paging over the pictures and videos of the whole feed. */
+    /**
+     * Opens the viewer at the post, paging over the pictures and videos of the whole feed oldest
+     * first, as a chat hands them over: a swipe to the left goes on to the next part of an album
+     * and to newer posts.
+     */
     private void openMedia(MessageObject message) {
         if (message == null || getParentActivity() == null) {
             return;
@@ -2661,7 +2665,8 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         }
         ArrayList<MessageObject> media = new ArrayList<>();
         int index = -1;
-        for (MessageObject m : messages) {
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            MessageObject m = messages.get(i);
             if (m.isDateObject || m.getId() <= 0 || !(m.isPhoto() || m.isVideo() || m.isGif())) {
                 continue;
             }

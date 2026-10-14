@@ -43,13 +43,27 @@ import java.util.List;
 /**
  * The Feeds tab of the chat list: the feeds drawn as the chat list draws chats, newest post
  * first, the row menu, "New feed", and the empty state. Lives inside a
- * {@code DialogsActivity.ViewPage} over the dialogs list and takes that list's paddings.
+ * {@code DialogsActivity.ViewPage} over the dialogs list, takes that list's paddings and, as
+ * that list does, folds the chat list's header away as it scrolls.
  */
 public class FeedsTabView extends FrameLayout {
 
     private static final int ROW_FEED = 0;
     private static final int ROW_NEW_FEED = 1;
     private static final int ROW_EMPTY = 2;
+    private static final int ROW_SPACER = 3;
+
+    /** The chat list's header above the feeds: the stories, the search field and the tabs. */
+    public interface Header {
+        /** How far the header folds at most: the stories and the search field. */
+        int foldRange();
+
+        /** How far the header is folded while the list is at its top: the stories, folded into the title. */
+        int restingFold();
+
+        /** The feeds moved; the header follows them in its next frame. */
+        void onFeedsMoved();
+    }
 
     /** A feed and its newest post: the last post of whichever of its channels posted last. */
     private static final class FeedRow {
@@ -69,10 +83,13 @@ public class FeedsTabView extends FrameLayout {
     private final int currentAccount;
     private final Theme.ResourcesProvider resourcesProvider;
     private final View dialogsList;
+    private final Header header;
     private final RecyclerListView listView;
+    private final LinearLayoutManager layoutManager;
     private final Adapter adapter;
     private final ArrayList<FeedRow> rows = new ArrayList<>();
-    private int headerOffset;
+    /** The last row, which lets a short list scroll the search field away. */
+    private View spacer;
     private final NotificationCenter.NotificationCenterDelegate themeObserver = (id, account, args) -> updateColors();
     /**
      * The chat list's panels above the list (Telegram's hints, the pause and reading banners)
@@ -81,19 +98,46 @@ public class FeedsTabView extends FrameLayout {
      */
     private final ViewTreeObserver.OnPreDrawListener paddingFollower = () -> getVisibility() != VISIBLE || !updatePadding();
 
-    public FeedsTabView(Context context, BaseFragment fragment, View dialogsList, Theme.ResourcesProvider resourcesProvider) {
+    public FeedsTabView(Context context, BaseFragment fragment, View dialogsList, Header header, Theme.ResourcesProvider resourcesProvider) {
         super(context);
         this.fragment = fragment;
         this.currentAccount = fragment.getCurrentAccount();
         this.resourcesProvider = resourcesProvider;
         this.dialogsList = dialogsList;
+        this.header = header;
         setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite, resourcesProvider));
 
-        listView = new RecyclerListView(context, resourcesProvider);
+        listView = new RecyclerListView(context, resourcesProvider) {
+            @Override
+            protected void onLayout(boolean changed, int l, int t, int r, int b) {
+                super.onLayout(changed, l, t, r, b);
+                header.onFeedsMoved();
+            }
+
+            @Override
+            protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+                super.onSizeChanged(w, h, oldw, oldh);
+                remeasureSpacer();
+            }
+        };
         listView.setClipToPadding(false);
-        listView.setLayoutManager(new LinearLayoutManager(context));
+        layoutManager = new LinearLayoutManager(context);
+        listView.setLayoutManager(layoutManager);
         adapter = new Adapter();
         listView.setAdapter(adapter);
+        listView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                header.onFeedsMoved();
+            }
+
+            @Override
+            public void onScrollStateChanged(@NonNull RecyclerView recyclerView, int newState) {
+                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
+                    settleSearchField();
+                }
+            }
+        });
         listView.setOnItemClickListener((view, position) -> {
             if (adapter.rowType(position) == ROW_NEW_FEED) {
                 createFeed();
@@ -146,6 +190,7 @@ public class FeedsTabView extends FrameLayout {
     public void update() {
         buildRows();
         adapter.notifyDataSetChanged();
+        remeasureSpacer();
     }
 
     public void scrollToTop() {
@@ -153,28 +198,86 @@ public class FeedsTabView extends FrameLayout {
     }
 
     /**
-     * How far the chat list's header is moved up from its full height (0 or less): it folds the
-     * stories and the search field away as the chats scroll, and the dialogs list scrolls its
-     * rows by the same amount, so the feeds start that much higher than the list's padding.
+     * How far the chat list's header is folded (0 or less) for where the feeds are, worked out
+     * as the chat list works it out from its chats: the stories fold while the list is at its
+     * top, and the first row's scroll past the top folds the search field. {@code current} while
+     * the list has no rows laid out yet.
      */
-    public void setHeaderOffset(int offset) {
-        if (headerOffset != offset) {
-            headerOffset = offset;
-            updatePadding();
+    public float headerOffset(float current) {
+        if (listView.getChildCount() == 0) {
+            return current;
+        }
+        int range = header.foldRange();
+        RecyclerView.ViewHolder first = listView.findViewHolderForLayoutPosition(0);
+        if (first == null) {
+            return -range;
+        }
+        int scrolled = Math.max(0, listView.getPaddingTop() - (int) first.itemView.getY());
+        return -Math.min(range, header.restingFold() + scrolled);
+    }
+
+    /** Scrolls the list to the header's fold, as the chat list scrolls a folder's chats when its tab opens. */
+    public void followHeader(float offset) {
+        int scrolled = Math.max(0, (int) -offset - header.restingFold());
+        layoutManager.scrollToPositionWithOffset(0, -scrolled);
+    }
+
+    /** As the chat list does, a half-folded search field folds away or comes back when the scroll stops. */
+    private void settleSearchField() {
+        RecyclerView.ViewHolder first = listView.findViewHolderForLayoutPosition(0);
+        if (first == null) {
+            return;
+        }
+        int search = header.foldRange() - header.restingFold();
+        int folded = listView.getPaddingTop() - (int) first.itemView.getY();
+        if (folded > 0 && folded < search) {
+            listView.smoothScrollBy(0, folded < search / 2 ? -folded : search - folded);
         }
     }
 
-    /** Takes the dialogs list's paddings, the top one moved by the header's fold; true when they changed. */
+    /**
+     * Takes the dialogs list's paddings, without the stories while they are folded into the
+     * title; true when they changed. The rows keep their place under the panels, as the chat
+     * list's rows do.
+     */
     private boolean updatePadding() {
         if (dialogsList == null) {
             return false;
         }
-        int top = Math.max(0, dialogsList.getPaddingTop() + headerOffset);
-        if (listView.getPaddingTop() != top || listView.getPaddingBottom() != dialogsList.getPaddingBottom()) {
-            listView.setPadding(0, top, 0, dialogsList.getPaddingBottom());
-            return true;
+        int top = Math.max(0, dialogsList.getPaddingTop() - header.restingFold());
+        int bottom = dialogsList.getPaddingBottom();
+        int oldTop = listView.getPaddingTop();
+        if (oldTop == top && listView.getPaddingBottom() == bottom) {
+            return false;
         }
-        return false;
+        listView.setPadding(0, top, 0, bottom);
+        if (listView.getScrollState() != RecyclerView.SCROLL_STATE_DRAGGING) {
+            listView.offsetChildrenVertical(top - oldTop);
+        }
+        remeasureSpacer();
+        return true;
+    }
+
+    private void remeasureSpacer() {
+        if (spacer != null) {
+            spacer.requestLayout();
+        }
+    }
+
+    /**
+     * The spacer's height: what the rows leave of the list, plus the search field, so the list
+     * scrolls the search field away however few feeds it has. Counts the rows as Telegram's
+     * {@code DialogsAdapter.LastEmptyView} counts the chats, by the cells' fixed heights.
+     */
+    private int spacerHeight() {
+        if (rows.isEmpty()) {
+            return 0;
+        }
+        int feedRow = dp(SharedConfig.useThreeLinesLayout ? 76 : 70) + 1;
+        int newFeedRow = dp(50);
+        int content = rows.size() * feedRow + newFeedRow;
+        int visible = listView.getMeasuredHeight() - listView.getPaddingTop() - listView.getPaddingBottom();
+        return Math.max(0, visible + header.foldRange() - header.restingFold() - content);
     }
 
     @Override
@@ -320,6 +423,9 @@ public class FeedsTabView extends FrameLayout {
     private class Adapter extends RecyclerListView.SelectionAdapter {
 
         int rowType(int position) {
+            if (position == getItemCount() - 1) {
+                return ROW_SPACER;
+            }
             if (rows.isEmpty()) {
                 return position == 0 ? ROW_EMPTY : ROW_NEW_FEED;
             }
@@ -332,7 +438,7 @@ public class FeedsTabView extends FrameLayout {
 
         @Override
         public int getItemCount() {
-            return rows.isEmpty() ? 2 : rows.size() + 1;
+            return (rows.isEmpty() ? 2 : rows.size() + 1) + 1;
         }
 
         @Override
@@ -361,6 +467,16 @@ public class FeedsTabView extends FrameLayout {
                     cell.setColors(Theme.key_windowBackgroundWhiteBlueIcon, Theme.key_windowBackgroundWhiteBlueText4);
                     cell.setTextAndIcon(LocaleController.getString(R.string.TgfeedNewFeed), R.drawable.msg_add, false);
                     view = cell;
+                    break;
+                }
+                case ROW_SPACER: {
+                    view = new View(parent.getContext()) {
+                        @Override
+                        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                            setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), spacerHeight());
+                        }
+                    };
+                    spacer = view;
                     break;
                 }
                 case ROW_EMPTY:

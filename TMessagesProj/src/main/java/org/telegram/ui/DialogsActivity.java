@@ -956,6 +956,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 blur3_InvalidateBlur();
             }
 
+            if (viewPages != null && viewPages[0].dialogsType == DIALOGS_TYPE_TGFEED && viewPages[0].tgfeedView != null && (rightSlidingDialogContainer == null || !rightSlidingDialogContainer.hasFragment()) && progressToActionMode == 0) { // TGFEED: on the Feeds tab the header follows the feeds, in every frame
+                invalidateScrollY = false; // TGFEED
+                DialogsActivity.this.setScrollY(viewPages[0].tgfeedView.headerOffset(scrollYOffset)); // TGFEED
+            } // TGFEED
             if (invalidateScrollY && (rightSlidingDialogContainer == null || !rightSlidingDialogContainer.hasFragment()) && progressToActionMode == 0) {
                 invalidateScrollY = false;
                 int firstItemPosition = hasHiddenArchive() && viewPages[0].dialogsType == DIALOGS_TYPE_DEFAULT ? 1 : 0;
@@ -6864,14 +6868,32 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     private void tgfeedShowFeedsPage(ViewPage page, boolean show) {
         if (show && page.tgfeedView == null) {
-            page.tgfeedView = new org.unofficial.telegramfeed.ui.FeedsTabView(getContext(), this, page.listView, getResourceProvider());
+            page.tgfeedView = new org.unofficial.telegramfeed.ui.FeedsTabView(getContext(), this, page.listView, new org.unofficial.telegramfeed.ui.FeedsTabView.Header() {
+                @Override
+                public int foldRange() {
+                    return getMaxScrollYOffset();
+                }
+
+                @Override
+                public int restingFold() {
+                    return getMaxScrollYOffsetWithoutSearch();
+                }
+
+                @Override
+                public void onFeedsMoved() {
+                    invalidateScrollY = true;
+                    if (fragmentView != null) {
+                        fragmentView.invalidate();
+                    }
+                }
+            }, getResourceProvider());
             page.addView(page.tgfeedView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         }
         if (page.tgfeedView != null) {
             page.tgfeedView.setVisibility(show ? View.VISIBLE : View.GONE);
             if (show) {
-                page.tgfeedView.setHeaderOffset((int) scrollYOffset);
                 page.tgfeedView.update();
+                page.tgfeedView.followHeader(scrollYOffset);
             }
         }
     }
@@ -9127,11 +9149,6 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             return;
         }
         scrollYOffset = value;
-        if (viewPages != null) { // TGFEED: the Feeds tab follows the header as it folds
-            for (ViewPage page : viewPages) { // TGFEED
-                if (page != null && page.tgfeedView != null) page.tgfeedView.setHeaderOffset((int) value); // TGFEED
-            } // TGFEED
-        } // TGFEED
         if (topBulletin != null) {
             topBulletin.updatePosition();
         }

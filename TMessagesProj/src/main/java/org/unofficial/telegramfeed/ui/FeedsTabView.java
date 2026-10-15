@@ -53,8 +53,14 @@ public class FeedsTabView extends FrameLayout {
     private static final int ROW_EMPTY = 2;
     private static final int ROW_SPACER = 3;
 
-    /** The chat list's header above the feeds: the stories, the search field and the tabs. */
+    /** The chat list's header above the feeds: the stories, the search field, the tabs and the panels. */
     public interface Header {
+        /** Where the chat list's rows start while the header is unfolded, as the header is drawn now. */
+        int listTopPadding();
+
+        /** The space the chat list's rows keep free at the bottom. */
+        int listBottomPadding();
+
         /** How far the header folds at most: the stories and the search field. */
         int foldRange();
 
@@ -82,7 +88,6 @@ public class FeedsTabView extends FrameLayout {
     private final BaseFragment fragment;
     private final int currentAccount;
     private final Theme.ResourcesProvider resourcesProvider;
-    private final View dialogsList;
     private final Header header;
     private final RecyclerListView listView;
     private final LinearLayoutManager layoutManager;
@@ -92,18 +97,17 @@ public class FeedsTabView extends FrameLayout {
     private View spacer;
     private final NotificationCenter.NotificationCenterDelegate themeObserver = (id, account, args) -> updateColors();
     /**
-     * The chat list's panels above the list (Telegram's hints, the pause and reading banners)
-     * come and go by measuring the dialogs list alone, so the list's padding is checked before
-     * every frame; a frame with a stale padding is dropped and laid out again.
+     * Before every frame the list is put where the header ends in that frame: the header moves
+     * as it draws (its panels animate, the search field folds), so a position taken at any
+     * other time can be stale by the time it is drawn.
      */
-    private final ViewTreeObserver.OnPreDrawListener paddingFollower = () -> getVisibility() != VISIBLE || !updatePadding();
+    private final ViewTreeObserver.OnPreDrawListener headerFollower = this::beforeFrame;
 
-    public FeedsTabView(Context context, BaseFragment fragment, View dialogsList, Header header, Theme.ResourcesProvider resourcesProvider) {
+    public FeedsTabView(Context context, BaseFragment fragment, Header header, Theme.ResourcesProvider resourcesProvider) {
         super(context);
         this.fragment = fragment;
         this.currentAccount = fragment.getCurrentAccount();
         this.resourcesProvider = resourcesProvider;
-        this.dialogsList = dialogsList;
         this.header = header;
         setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite, resourcesProvider));
 
@@ -168,14 +172,14 @@ public class FeedsTabView extends FrameLayout {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         NotificationCenter.getGlobalInstance().addObserver(themeObserver, NotificationCenter.didSetNewTheme);
-        getViewTreeObserver().addOnPreDrawListener(paddingFollower);
+        getViewTreeObserver().addOnPreDrawListener(headerFollower);
     }
 
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         NotificationCenter.getGlobalInstance().removeObserver(themeObserver, NotificationCenter.didSetNewTheme);
-        getViewTreeObserver().removeOnPreDrawListener(paddingFollower);
+        getViewTreeObserver().removeOnPreDrawListener(headerFollower);
     }
 
     /** Takes a new theme's colours; the rows are made again, since each takes its colours when it is made. */
@@ -235,27 +239,47 @@ public class FeedsTabView extends FrameLayout {
         }
     }
 
-    /**
-     * Takes the dialogs list's paddings, without the stories while they are folded into the
-     * title; true when they changed. The rows keep their place under the panels, as the chat
-     * list's rows do.
-     */
-    private boolean updatePadding() {
-        if (dialogsList == null) {
-            return false;
+    /** How far the first feed was from the list's top in the last frame; the header follows any change. */
+    private int lastFirstOffset = Integer.MIN_VALUE;
+
+    private boolean beforeFrame() {
+        if (getVisibility() != VISIBLE) {
+            return true;
         }
-        int top = Math.max(0, dialogsList.getPaddingTop() - header.restingFold());
-        int bottom = dialogsList.getPaddingBottom();
-        int oldTop = listView.getPaddingTop();
-        if (oldTop == top && listView.getPaddingBottom() == bottom) {
-            return false;
+        boolean moved = followHeaderEdge();
+        RecyclerView.ViewHolder first = listView.findViewHolderForLayoutPosition(0);
+        int firstOffset = first == null ? Integer.MIN_VALUE : (int) first.itemView.getY() - listView.getPaddingTop();
+        if (moved || firstOffset != lastFirstOffset) {
+            lastFirstOffset = firstOffset;
+            header.onFeedsMoved();
         }
-        listView.setPadding(0, top, 0, bottom);
-        if (listView.getScrollState() != RecyclerView.SCROLL_STATE_DRAGGING) {
-            listView.offsetChildrenVertical(top - oldTop);
-        }
-        remeasureSpacer();
         return true;
+    }
+
+    /**
+     * Puts the list where the header ends now: the chat list's top padding as the header draws
+     * it, without the stories while they are folded into the title, and the first feed never
+     * below it while nothing scrolls the list. True when the list moved.
+     */
+    private boolean followHeaderEdge() {
+        int top = Math.max(0, header.listTopPadding() - header.restingFold());
+        int bottom = header.listBottomPadding();
+        int oldTop = listView.getPaddingTop();
+        boolean moved = false;
+        if (oldTop != top || listView.getPaddingBottom() != bottom) {
+            listView.setPadding(0, top, 0, bottom);
+            if (listView.getScrollState() != RecyclerView.SCROLL_STATE_DRAGGING) {
+                listView.offsetChildrenVertical(top - oldTop);
+            }
+            remeasureSpacer();
+            moved = true;
+        }
+        RecyclerView.ViewHolder first = listView.findViewHolderForLayoutPosition(0);
+        if (first != null && first.itemView.getTop() > top && listView.getScrollState() == RecyclerView.SCROLL_STATE_IDLE && !listView.isAnimating()) {
+            listView.offsetChildrenVertical(top - first.itemView.getTop());
+            moved = true;
+        }
+        return moved;
     }
 
     private void remeasureSpacer() {
@@ -282,7 +306,7 @@ public class FeedsTabView extends FrameLayout {
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        updatePadding();
+        followHeaderEdge();
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     }
 

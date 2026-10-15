@@ -6868,7 +6868,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     private void tgfeedShowFeedsPage(ViewPage page, boolean show) {
         if (show && page.tgfeedView == null) {
-            page.tgfeedView = new org.unofficial.telegramfeed.ui.FeedsTabView(getContext(), this, page.listView, new org.unofficial.telegramfeed.ui.FeedsTabView.Header() {
+            page.tgfeedView = new org.unofficial.telegramfeed.ui.FeedsTabView(getContext(), this, new org.unofficial.telegramfeed.ui.FeedsTabView.Header() {
                 @Override
                 public int foldRange() {
                     return getMaxScrollYOffset();
@@ -6877,6 +6877,16 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 @Override
                 public int restingFold() {
                     return getMaxScrollYOffsetWithoutSearch();
+                }
+
+                @Override
+                public int listTopPadding() {
+                    return tgfeedListTopPadding();
+                }
+
+                @Override
+                public int listBottomPadding() {
+                    return calculateListViewPaddingBottom();
                 }
 
                 @Override
@@ -6896,6 +6906,29 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
                 page.tgfeedView.followHeader(scrollYOffset);
             }
         }
+    }
+
+    /**
+     * The top padding {@code DialogsRecyclerView.onMeasure} gives the dialogs list, worked out
+     * from the header as it is drawn now: the dialogs list takes it only when it is measured
+     * again, while the Feeds tab follows it in every frame. Mirrors that method's formula.
+     */
+    private int tgfeedListTopPadding() {
+        int t = ActionBar.getCurrentActionBarHeight() + (actionBar.getOccupyStatusBar() ? AndroidUtilities.statusBarHeight : 0);
+        if (hasStories && !actionModeFullyShowed) {
+            t += dp(DialogStoriesCell.HEIGHT_IN_DP);
+        }
+        if (!actionModeFullyShowed) {
+            t += dp(SEARCH_FIELD_HEIGHT);
+        }
+        final float filterTabsVisibility = getFilterTabsVisibilityFactor(false);
+        final float topPanelsVisibility = topPanelLayout != null ? topPanelLayout.getMetadata().getTotalVisibility() : 0f;
+        t += (int) (dp(36 + 14) * filterTabsVisibility);
+        if (topPanelLayout != null) {
+            t += (int) topPanelLayout.getAnimatedHeightWithPadding(lerp((float) dp(14), dp(7), filterTabsVisibility));
+        }
+        t -= dp(5 * Math.max(filterTabsVisibility, topPanelsVisibility));
+        return t;
     }
 
     private void tgfeedUpdate() {

@@ -8,7 +8,7 @@ The official Telegram app for Android with three additions for people who follow
 
 | Topic | Decision |
 |---|---|
-| Name | "Unofficial Telegram Feed" as the app's name, "TG Feed" under the launcher icon: Telegram's API terms allow "Telegram" in an app's title only after "Unofficial". The package is `org.unofficial.telegramfeed`; the launcher icon is the Flutter app's, not Telegram's logo. |
+| Name | "Unofficial Telegram Feed" as the app's name, "TG Feed" under the launcher icon: Telegram's API terms allow "Telegram" in an app's title only after "Unofficial". The package is `org.unofficial.telegramfeed`. Nothing shows Telegram's logo: the launcher icon, the notification and status bar icon, the splash screen and the intro page carry the Flutter app's icon, notifications are tinted with its blue, the chat list's title reads "TG Feed", dialogs carry the app's name, and Telegram's alternative app icons are not offered. |
 | Base | A fork of the official client, DrKLO/Telegram. Upstream is tracked and merged on every Telegram release. The fork's code lives in its own package inside the app; every edit to a Telegram file is marked. |
 | Platform | Android, with the official app's minimum version. Development and testing on an x86_64 emulator. |
 | Accounts | Telegram's accounts. Feeds and rules belong to an account; each logged-in account has its own. |

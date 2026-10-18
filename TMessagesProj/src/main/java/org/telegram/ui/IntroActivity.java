@@ -788,15 +788,7 @@ public class IntroActivity extends BaseFragment implements NotificationCenter.No
             loadTexture(R.drawable.intro_private_door, 19);
             loadTexture(R.drawable.intro_private_screw, 20);
             loadTexture(R.drawable.intro_tg_plane, 21);
-            loadTexture(v -> {
-                Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                paint.setColor(ThemeColors.TELEGRAM_COLOR); // It's logo color, it should not be colored by the theme
-                int size = dp(ICON_HEIGHT_DP);
-                Bitmap bm = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-                Canvas c = new Canvas(bm);
-                c.drawCircle(size / 2f, size / 2f, size / 2f, paint);
-                return bm;
-            }, 22);
+            loadTexture(v -> org.unofficial.telegramfeed.ui.Brand.introCircle(dp(ICON_HEIGHT_DP)), 22); // TGFEED: the launcher icon's gradient instead of Telegram's blue
             loadTexture(telegramMaskProvider, 23);
 
             updateTelegramTextures();

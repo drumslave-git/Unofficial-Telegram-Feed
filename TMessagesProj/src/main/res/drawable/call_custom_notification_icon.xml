@@ -4,7 +4,7 @@
         android:width="40dp"
         android:height="40dp">
         <shape android:shape="oval">
-            <solid android:color="#2ca5e0" />
+            <solid android:color="#2f6fe4" /> <!-- TGFEED: the launcher icon's blue -->
         </shape>
     </item>
     <item

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TGFEED: the app's own status bar icon in place of Telegram's plane: the launcher icon's
+     glyph (tgfeed_icon_foreground.xml), three channels merging into one feed, in white. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54.5"
+        android:pivotY="54"
+        android:scaleX="1.55"
+        android:scaleY="1.55"
+        android:translateX="-0.5">
+        <path
+            android:pathData="M31,35 C50,35 48,54 64,54 M31,54 L78,54 M31,73 C50,73 48,54 64,54 M70,44 L80,54 L70,64"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="7"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M25.5,35 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0 M25.5,54 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0 M25.5,73 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0"
+            android:fillColor="#FFFFFFFF" />
+    </group>
+</vector>

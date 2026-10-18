@@ -335,11 +335,11 @@ public class DialogStoriesCell extends FrameLayout implements NotificationCenter
         telegramLogoView = new ImageView(context);
         telegramLogoView.setContentDescription(getString(R.string.AppName));
         telegramLogoView.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
-        telegramLogoView.setImageResource(R.drawable.telegram_logo_2);
+        telegramLogoView.setImageDrawable(org.unofficial.telegramfeed.ui.Brand.titleDrawable()); // TGFEED: the launcher label instead of Telegram's wordmark
         telegramLogoView.setColorFilter(getTextLogoColor(), PorterDuff.Mode.MULTIPLY);
         telegramLogoView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
         telegramLogoView.setFocusableInTouchMode(true);
-        addView(telegramLogoView, LayoutHelper.createFrame(90, 22));
+        addView(telegramLogoView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, 22)); // TGFEED: as wide as the label
 
         statusDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(null, dp(26));
         statusDrawable.center = true;

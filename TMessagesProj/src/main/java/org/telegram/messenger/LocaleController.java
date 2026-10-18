@@ -1266,6 +1266,7 @@ public class LocaleController {
                 }
                 eventType = parser.next();
             }
+            stringMap.remove("AppName"); // TGFEED: the app's own name, never a language pack's "Telegram"
             return stringMap;
         } catch (Exception e) {
             try {

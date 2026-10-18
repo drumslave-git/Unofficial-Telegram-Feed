@@ -18,6 +18,7 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.ui.LaunchActivity;
+import org.unofficial.telegramfeed.ui.Brand;
 
 /**
  * The media foreground service that keeps the process alive while posts are read aloud, so speech
@@ -116,6 +117,7 @@ public class ReadAloudService extends Service {
         PendingIntent content = PendingIntent.getActivity(context, 0, open, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         return new NotificationCompat.Builder(context, CHANNEL)
                 .setSmallIcon(R.drawable.notification)
+                .setColor(Brand.ICON_BLUE)
                 .setContentTitle(LocaleController.getString(R.string.TgfeedReadingAloud))
                 .setContentIntent(content)
                 .setOngoing(true)

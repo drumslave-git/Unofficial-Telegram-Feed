@@ -36,7 +36,7 @@ adb install -r TMessagesProj_App/build/outputs/apk/afat/debug/app.apk
 
 ## Telegram's conditions
 
-Telegram asks every third-party client to use its own `api_id`, to say that it is unofficial, and not to use Telegram's logo. This app does all three: the credentials come from `secrets/`, the name begins with "Unofficial", and the launcher icon is its own.
+Telegram asks every third-party client to use its own `api_id`, to say that it is unofficial, and not to use Telegram's logo. This app does all three: the credentials come from `secrets/`, the name begins with "Unofficial", and the launcher icon, the notification icon, the splash screen, the intro page and the chat list's title are its own.
 
 ## License
 

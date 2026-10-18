@@ -25,6 +25,8 @@ export ANDROID_HOME="C:/Users/<user>/AppData/Local/Android/Sdk"
 
 The APK is `TMessagesProj_App/build/outputs/apk/afat/debug/app.apk` (about 107 MB, all four ABIs). The `afat` flavour is the only one the debug build type accepts (`variantFilter` in `TMessagesProj_App/build.gradle`).
 
+`tool/build.sh [debug|release|ci] [--install] [--run] [<gradle args>]` runs these builds, and `tool/ci.sh` as `ci`, with gradle's output in `build/tool-build.log` and prints only the result: the build time, the APK and the number of warnings in the fork's files, or the compiler errors and gradle's failure section. `--install` installs the APK on the connected device or emulator and `--run` opens it. When `JAVA_HOME` is unset it uses the Temurin 17 under `~/.gradle/jdks`.
+
 The native part compiles only Telegram's own C++ (`tmessages.49`, about 1730 object files per ABI); ffmpeg, BoringSSL, dav1d, libvpx, opus, tde2e, tlottie and wamr are prebuilt static libraries under `TMessagesProj/jni/prebuild/lib/<abi>`. A clean build of all four ABIs takes 28 minutes on the development machine; a build after a Java or resource change takes one to five minutes. Gradle's daemon needs the 8 GB heap set in `gradle.properties`.
 
 ### Release APK for hands-on passes
@@ -49,6 +51,8 @@ adb shell monkey -p org.unofficial.telegramfeed -c android.intent.category.LAUNC
 ```
 
 Telegram login on the emulator uses a spare real account on the production DC; the owner of that account types the phone number and code.
+
+`tool/layout.sh [--px] [--text] [--depth <n>] [<pattern>]` prints the view tree of the screen on the device (`uiautomator dump`), one node per line with its bounds in dp (pixels with `--px`), wrappers that add nothing folded into their child. `--text` keeps the nodes with a text or description and a pattern keeps the matching nodes with their ancestors. It measures a layout exactly, where a screenshot only shows it.
 
 ## 3. Identity
 
@@ -221,7 +225,7 @@ The remote `upstream` is https://github.com/DrKLO/Telegram.git. On every Telegra
 
 ## 10. Tests and CI
 
-`tool/ci.sh` runs the unit tests of `TMessagesProj_FeedTests` (`:TMessagesProj_FeedTests:test`) and builds the debug APK, and exits with the first failing step's code; it needs `JAVA_HOME` and `ANDROID_HOME` as in section 2. `TMessagesProj_AppTests` holds Telegram's instrumented tests and is not run.
+`tool/ci.sh` runs the unit tests of `TMessagesProj_FeedTests` (`:TMessagesProj_FeedTests:test`) and builds the debug APK, and exits with the first failing step's code; it needs `JAVA_HOME` and `ANDROID_HOME` as in section 2. `tool/build.sh ci` runs it with the output in a log and only the result on the terminal (section 2). `TMessagesProj_AppTests` holds Telegram's instrumented tests and is not run.
 
 The gradle property `TGFEED_ABIS` (comma-separated ABI names) limits the ABIs the native code is built for; without it all four are built.
 

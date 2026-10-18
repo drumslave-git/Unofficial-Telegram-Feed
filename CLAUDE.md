@@ -27,3 +27,15 @@ A fork of the official Telegram app for Android (DrKLO/Telegram) with three addi
 - Spikes go on `spike/<name>` branches. Their lasting findings go into `docs/ARCHITECTURE.md`.
 - Upstream (DrKLO/Telegram) is merged on every Telegram release, following the procedure in `docs/ARCHITECTURE.md`. The Huawei, HockeyApp and Standalone modules stay untouched for those merges.
 - `tool/ci.sh` must pass before a task is committed.
+
+## Keeping sessions small
+
+Telegram's files are huge (`ChatActivity.java` has 47k lines), so one careless read costs more than a task's worth of edits, and a long session buries the details the next fix needs. These rules hold in every session.
+
+- One PLAN.md task per session. The session ends with the task's commit; the next task gets a new session. Two sessions never work in this checkout at once.
+- No file is read whole. `grep -n` first, then ranges of at most 150 lines. A file is not re-read after an edit. CodeGraph queries name the symbols and cap files at 4. `docs/ARCHITECTURE.md` is read by section: its headings first, then the section.
+- Builds go through `tool/build.sh` (`debug`, `release` or `ci`), which keeps gradle's output in a log and prints only the result, and they run in the background. `tool/ci.sh` is run as `tool/build.sh ci`.
+- Logcat is read filtered and tailed (`adb logcat -d | grep -E 'AndroidRuntime|<tag>' | tail -40`), never whole.
+- Layouts are measured with `tool/layout.sh`, which prints the screen's view tree with bounds in dp. A screenshot is taken only for what the tree cannot show (colours, drawing, a wrong glyph), one per check.
+- Diffs are reviewed per file (`git diff --stat`, then `git diff -- <file>`), never a whole session's diff at once.
+- Command output is capped (`| tail -40`, `| head -60`) unless the whole output is the point.

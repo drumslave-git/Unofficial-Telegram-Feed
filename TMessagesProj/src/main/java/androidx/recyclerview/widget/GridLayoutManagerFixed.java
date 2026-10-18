@@ -122,6 +122,12 @@ public class GridLayoutManagerFixed extends GridLayoutManager {
         final boolean layingOutInPrimaryDirection = layoutState.mItemDirection == LayoutState.ITEM_DIRECTION_TAIL;
         result.mConsumed = 0;
 
+        if (layoutState.mLayoutDirection == LayoutState.LAYOUT_START) { // TGFEED: rows the other fill already laid out (a sibling row taken with the anchor) are not laid out twice
+            while (layoutState.hasMore(state) && findViewByPosition(layoutState.mCurrentPosition) != null) { // TGFEED
+                layoutState.mCurrentPosition += layoutState.mItemDirection; // TGFEED
+            } // TGFEED
+        } // TGFEED
+
         int startPosition = layoutState.mCurrentPosition;
         if (
             mShouldReverseLayout &&

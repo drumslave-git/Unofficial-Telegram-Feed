@@ -280,6 +280,11 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         return (channelId << 32) | (messageId & 0xFFFFFFFFL);
     }
 
+    /** The album a shown post lies in as a key unique across the feed's channels; 0 when it lies in none. */
+    private long albumKey(MessageObject message) {
+        return groupOf(message) != null ? message.getGroupId() ^ message.getDialogId() : 0;
+    }
+
     /** The album a shown post is part of, or null for a single post, a folded row or a service row. */
     private MessageObject.GroupedMessages groupOf(MessageObject message) {
         if (message.contentType != 0 || !message.hasValidGroupId() || minimized.contains(key(-message.getDialogId(), message.getId()))) {
@@ -1992,6 +1997,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
                 new FeedOrder.Key(-a.getDialogId(), a.getId(), a.messageOwner.date),
                 new FeedOrder.Key(-b.getDialogId(), b.getId(), b.messageOwner.date)));
         Collections.reverse(shown);
+        shown = new ArrayList<>(FeedOrder.albumsTogether(shown, message -> message.hasValidGroupId() ? message.getGroupId() ^ message.getDialogId() : 0));
         ArrayList<MessageObject> visible = applyFilter(shown);
 
         groups.clear();
@@ -2036,11 +2042,16 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         messages.clear();
         int currentDay = Integer.MIN_VALUE;
         int currentDayStart = 0;
-        for (MessageObject message : visible) {
+        // An album is one block of rows: no date row or divider goes between its parts.
+        boolean dividerPending = false;
+        for (int i = 0; i < visible.size(); i++) {
+            MessageObject message = visible.get(i);
+            long album = albumKey(message);
+            boolean albumGoesOn = album != 0 && i > 0 && albumKey(visible.get(i - 1)) == album;
             Calendar calendar = Calendar.getInstance();
             calendar.setTimeInMillis(message.messageOwner.date * 1000L);
             int day = calendar.get(Calendar.YEAR) * 1000 + calendar.get(Calendar.DAY_OF_YEAR);
-            if (day != currentDay) {
+            if (day != currentDay && !albumGoesOn) {
                 if (currentDay != Integer.MIN_VALUE) {
                     messages.add(dateRow(currentDayStart, currentDay));
                 }
@@ -2054,7 +2065,12 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             message.stableId = stableId(key(-message.getDialogId(), message.getId()));
             messages.add(message);
             if (unreadDividerKey != 0 && key(-message.getDialogId(), message.getId()) == unreadDividerKey) {
+                dividerPending = true;
+            }
+            // above the whole album that holds the oldest unread post
+            if (dividerPending && (album == 0 || i + 1 >= visible.size() || albumKey(visible.get(i + 1)) != album)) {
                 messages.add(unreadRow());
+                dividerPending = false;
             }
         }
         if (currentDay != Integer.MIN_VALUE) {
@@ -2066,7 +2082,7 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
             adapter.notifyDataSetChanged();
             if (keepId != 0 && layoutManager != null) {
                 for (int i = 0; i < messages.size(); i++) {
-                    if (messages.get(i).stableId == keepId) {
+                    if (adapter.getItemId(adapter.positionOf(i)) == keepId) {
                         layoutManager.scrollToPositionWithOffset(adapter.positionOf(i), keepTop - listView.getPaddingTop(), false);
                         break;
                     }
@@ -2730,6 +2746,11 @@ public class FeedActivity extends BaseFragment implements NotificationCenter.Not
         @Override
         public long getItemId(int position) {
             MessageObject message = messageAt(position);
+            if (message != null && !message.isDateObject && message.contentType != 2) {
+                // From the feed's own map: a cell rebound to another channel's post with the same
+                // message id copies the old post's stableId onto it (MessageObject.copyStableParams).
+                return stableId(key(-message.getDialogId(), message.getId()));
+            }
             if (message != null) {
                 return message.stableId;
             }

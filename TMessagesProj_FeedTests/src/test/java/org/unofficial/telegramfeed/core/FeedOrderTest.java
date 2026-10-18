@@ -39,6 +39,27 @@ public class FeedOrderTest {
         assertEquals(0, FeedOrder.OLDEST_FIRST.compare(key(4, 8, 15), key(4, 8, 15)));
     }
 
+    @Test
+    public void albumPartsComeTogetherAtTheFirstPartsPlace() {
+        // "a1".."a3" are one album; "x" and "y" of another channel fell between its parts
+        List<String> posts = Arrays.asList("p", "a1", "x", "a2", "y", "a3", "q");
+        List<String> out = FeedOrder.albumsTogether(posts, post -> post.startsWith("a") ? 7 : 0);
+        assertEquals(Arrays.asList("p", "a1", "a2", "a3", "x", "y", "q"), out);
+    }
+
+    @Test
+    public void twoAlbumsInterleavedEachStayWhole() {
+        List<String> posts = Arrays.asList("a1", "b1", "a2", "b2");
+        List<String> out = FeedOrder.albumsTogether(posts, post -> post.charAt(0));
+        assertEquals(Arrays.asList("a1", "a2", "b1", "b2"), out);
+    }
+
+    @Test
+    public void postsOutsideAlbumsKeepTheirOrder() {
+        List<String> posts = Arrays.asList("c", "b", "a");
+        assertEquals(posts, FeedOrder.albumsTogether(posts, post -> 0));
+    }
+
     private static List<String> labels(List<FeedOrder.Key> posts) {
         List<String> out = new ArrayList<>();
         for (FeedOrder.Key k : posts) {

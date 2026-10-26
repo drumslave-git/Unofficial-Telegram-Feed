@@ -2,6 +2,7 @@ package org.unofficial.telegramfeed.feeds;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.SharedPreferences;
 
 import org.telegram.messenger.AndroidUtilities;
@@ -127,6 +128,16 @@ public class SavedMessagesSync extends BaseController implements NotificationCen
             check();
         }
         showChoice(fragment);
+    }
+
+    /**
+     * The chat list is in front with its transition over: asks a pending choice, which a fragment
+     * refuses to show while it is still sliding in from {@link #onChatListResumed}.
+     */
+    public void onChatListShown(BaseFragment fragment) {
+        if (getUserConfig().isClientActivated() && pendingCopy != null) {
+            AndroidUtilities.runOnUIThread(() -> showChoice(fragment));
+        }
     }
 
     /** The "Sync with Saved Messages" row: asks a pending choice, or syncs now. */
@@ -560,8 +571,10 @@ public class SavedMessagesSync extends BaseController implements NotificationCen
         builder.setNegativeButton(LocaleController.getString(R.string.TgfeedSyncKeepLocal), (dialog, which) -> choose(CHOICE_KEEP));
         builder.setNeutralButton(LocaleController.getString(R.string.TgfeedSyncUseCopy), (dialog, which) -> choose(CHOICE_COPY));
         AlertDialog dialog = builder.create();
-        dialog.setOnDismissListener(d -> choiceShowing = false);
-        if (fragment.showDialog(dialog) != null) {
+        // showDialog puts its own dismiss listener on the dialog and calls the one it is given
+        DialogInterface.OnDismissListener dismissed = d -> choiceShowing = false;
+        dialog.setOnDismissListener(dismissed);
+        if (fragment.showDialog(dialog, dismissed) != null) {
             choiceShowing = true;
         }
     }

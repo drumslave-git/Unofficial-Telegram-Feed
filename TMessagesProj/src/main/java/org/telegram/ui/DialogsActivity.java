@@ -7564,6 +7564,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     @Override
     public void onBecomeFullyVisible() {
         super.onBecomeFullyVisible();
+        org.unofficial.telegramfeed.feeds.SavedMessagesSync.getInstance(currentAccount).onChatListShown(this); // TGFEED: the pending sync choice, which a transition refuses in onResume
         if (isArchive()) {
             SharedPreferences preferences = MessagesController.getGlobalMainSettings();
             boolean showArchiveHint = preferences.getBoolean("archivehint", true);

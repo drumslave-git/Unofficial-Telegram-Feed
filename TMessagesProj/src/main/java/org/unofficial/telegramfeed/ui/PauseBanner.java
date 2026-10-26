@@ -58,7 +58,6 @@ public class PauseBanner extends FrameLayout implements NotificationCenter.Notif
 
         text = new TextView(context);
         text.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 13);
-        text.setText(LocaleController.getString(R.string.TgfeedPausedBanner));
         row.addView(text, LayoutHelper.createLinear(0, LayoutHelper.WRAP_CONTENT, 1f, Gravity.CENTER_VERTICAL, 12, 8, 8, 8));
 
         resume = new TextView(context);
@@ -66,14 +65,21 @@ public class PauseBanner extends FrameLayout implements NotificationCenter.Notif
         resume.setTypeface(AndroidUtilities.bold());
         resume.setGravity(Gravity.CENTER);
         resume.setPadding(dp(12), 0, dp(12), 0);
-        resume.setText(LocaleController.getString(R.string.TgfeedResume));
         resume.setOnClickListener(v -> SharedConfig.setTgfeedRulesPaused(false));
         row.addView(resume, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, 36, Gravity.CENTER_VERTICAL, 0, 0, 8, 0));
 
+        updateTexts();
         updateColors();
         apply(false);
     }
 
+    /** Set again on every attach: a screen that keeps its banner gets it back after a change of language. */
+    private void updateTexts() {
+        text.setText(LocaleController.getString(R.string.TgfeedPausedBanner));
+        resume.setText(LocaleController.getString(R.string.TgfeedResume));
+    }
+
+    /** Set again on every attach and on a change of theme. */
     public void updateColors() {
         int red = Theme.getColor(Theme.key_text_RedBold);
         icon.setColorFilter(new PorterDuffColorFilter(red, PorterDuff.Mode.SRC_IN));
@@ -100,6 +106,9 @@ public class PauseBanner extends FrameLayout implements NotificationCenter.Notif
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.tgfeedPauseChanged);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.didSetNewTheme);
+        updateTexts();
+        updateColors();
         apply(true);
     }
 
@@ -107,12 +116,15 @@ public class PauseBanner extends FrameLayout implements NotificationCenter.Notif
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.tgfeedPauseChanged);
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.didSetNewTheme);
     }
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
         if (id == NotificationCenter.tgfeedPauseChanged) {
             apply(true);
+        } else if (id == NotificationCenter.didSetNewTheme) {
+            updateColors();
         }
     }
 

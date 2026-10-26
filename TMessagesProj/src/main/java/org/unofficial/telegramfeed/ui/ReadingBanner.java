@@ -78,28 +78,35 @@ public class ReadingBanner extends FrameLayout implements NotificationCenter.Not
         buttons.setGravity(LocaleController.isRTL ? Gravity.LEFT : Gravity.RIGHT);
         column.addView(buttons, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 2, 0, 6));
 
-        stopAll = button(context, R.string.TgfeedStopAll);
+        stopAll = button(context);
         stopAll.setOnClickListener(v -> ReadAloudController.getInstance().stopAll());
         buttons.addView(stopAll, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, 36, 0, 0, 4, 0));
 
-        stop = button(context, R.string.TgfeedStop);
+        stop = button(context);
         stop.setOnClickListener(v -> ReadAloudController.getInstance().skipCurrent());
         buttons.addView(stop, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, 36, 0, 0, 8, 0));
 
+        updateTexts();
         updateColors();
         apply(false);
     }
 
-    private static TextView button(Context context, int textRes) {
+    private static TextView button(Context context) {
         TextView button = new TextView(context);
         button.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         button.setTypeface(AndroidUtilities.bold());
         button.setGravity(Gravity.CENTER);
         button.setPadding(dp(12), 0, dp(12), 0);
-        button.setText(LocaleController.getString(textRes));
         return button;
     }
 
+    /** Set again on every attach: a screen that keeps its banner gets it back after a change of language. */
+    private void updateTexts() {
+        stopAll.setText(LocaleController.getString(R.string.TgfeedStopAll));
+        stop.setText(LocaleController.getString(R.string.TgfeedStop));
+    }
+
+    /** Set again on every attach and on a change of theme. */
     public void updateColors() {
         int accent = Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4);
         icon.setColorFilter(new PorterDuffColorFilter(accent, PorterDuff.Mode.SRC_IN));
@@ -142,6 +149,9 @@ public class ReadingBanner extends FrameLayout implements NotificationCenter.Not
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.tgfeedReadAloudChanged);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.didSetNewTheme);
+        updateTexts();
+        updateColors();
         shown = !shown;
         apply(true);
     }
@@ -150,12 +160,15 @@ public class ReadingBanner extends FrameLayout implements NotificationCenter.Not
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.tgfeedReadAloudChanged);
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.didSetNewTheme);
     }
 
     @Override
     public void didReceivedNotification(int id, int account, Object... args) {
         if (id == NotificationCenter.tgfeedReadAloudChanged) {
             apply(true);
+        } else if (id == NotificationCenter.didSetNewTheme) {
+            updateColors();
         }
     }
 }

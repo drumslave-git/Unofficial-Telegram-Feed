@@ -209,6 +209,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         getNotificationCenter().addObserver(this, NotificationCenter.updateInterfaces);
         getNotificationCenter().addObserver(this, NotificationCenter.starBalanceUpdated);
         getNotificationCenter().addObserver(this, NotificationCenter.newSuggestionsAvailable);
+        getNotificationCenter().addObserver(this, NotificationCenter.tgfeedSyncChanged); // TGFEED
 
         if (arguments != null) {
             hasMainTabs = arguments.getBoolean("hasMainTabs", false);
@@ -502,6 +503,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         getNotificationCenter().removeObserver(this, NotificationCenter.updateInterfaces);
         getNotificationCenter().removeObserver(this, NotificationCenter.starBalanceUpdated);
         getNotificationCenter().removeObserver(this, NotificationCenter.newSuggestionsAvailable);
+        getNotificationCenter().removeObserver(this, NotificationCenter.tgfeedSyncChanged); // TGFEED
     }
 
     @Override
@@ -513,7 +515,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             }
         } else if (id == NotificationCenter.updateInterfaces) {
             setInfo();
-        } else if (id == NotificationCenter.newSuggestionsAvailable) {
+        } else if (id == NotificationCenter.newSuggestionsAvailable || id == NotificationCenter.tgfeedSyncChanged) { // TGFEED: the sync row's status
             if (listView != null) {
                 listView.adapter.update(true);
             }
@@ -694,6 +696,7 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
         items.add(UItem.asCheck(100, getString(R.string.TgfeedHideStories)).setChecked(SharedConfig.tgfeedHideStories));
         items.add(UItem.asButton(101, R.drawable.msg_notifications, getString(R.string.TgfeedRules))); // TGFEED
         items.add(UItem.asButton(102, R.drawable.msg_voice_speaker, getString(R.string.TgfeedReadAloudTitle))); // TGFEED
+        items.add(UItem.asButton(103, R.drawable.msg_saved, getString(R.string.TgfeedSync), org.unofficial.telegramfeed.feeds.SavedMessagesSync.getInstance(currentAccount).status())); // TGFEED
         items.add(UItem.asShadow(null));
 
         items.add(SettingCell.Factory.of(1, IconBackgroundColors.BLUE.top, IconBackgroundColors.BLUE.bottom, R.drawable.settings_account, getString(R.string.SettingsAccount), getString(R.string.SettingsAccountInfo)));
@@ -823,6 +826,9 @@ public class SettingsActivity extends BaseFragment implements NotificationCenter
             return;
         }
         switch (item.id) {
+            case 103: // TGFEED
+                org.unofficial.telegramfeed.feeds.SavedMessagesSync.getInstance(currentAccount).syncNow(this); // TGFEED
+                break; // TGFEED
             case 102: // TGFEED
                 presentFragment(new org.unofficial.telegramfeed.ui.ReadAloudActivity()); // TGFEED
                 break; // TGFEED

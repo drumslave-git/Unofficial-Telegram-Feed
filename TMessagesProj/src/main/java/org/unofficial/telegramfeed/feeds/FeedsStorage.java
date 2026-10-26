@@ -9,6 +9,7 @@ import org.telegram.messenger.FileLog;
 import org.telegram.messenger.Utilities;
 import org.unofficial.telegramfeed.core.Feed;
 import org.unofficial.telegramfeed.core.FeedFilter;
+import org.unofficial.telegramfeed.core.FeedsConfig;
 import org.unofficial.telegramfeed.core.Rule;
 import org.unofficial.telegramfeed.core.Schedule;
 
@@ -253,6 +254,31 @@ public class FeedsStorage {
                 FileLog.e(e);
             }
         });
+    }
+
+    /** Replaces every feed and rule with the config's. */
+    public void replaceAll(FeedsConfig source) {
+        final FeedsConfig config = new FeedsConfig(source.feeds, source.rules);
+        queue.postRunnable(() -> {
+            if (database == null) {
+                return;
+            }
+            try {
+                database.beginTransaction();
+                database.executeFast("DELETE FROM feed_channels").stepThis().dispose();
+                database.executeFast("DELETE FROM feeds").stepThis().dispose();
+                database.executeFast("DELETE FROM rules").stepThis().dispose();
+                database.commitTransaction();
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        });
+        for (Feed feed : config.feeds) {
+            saveFeed(feed);
+        }
+        for (Rule rule : config.rules) {
+            saveRule(rule);
+        }
     }
 
     /** Closes the database and deletes the file (the account logged out). */

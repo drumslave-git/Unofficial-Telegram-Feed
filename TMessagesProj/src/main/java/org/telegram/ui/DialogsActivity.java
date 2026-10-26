@@ -7228,6 +7228,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     @Override
     public void onResume() {
         super.onResume();
+        org.unofficial.telegramfeed.feeds.SavedMessagesSync.getInstance(currentAccount).onChatListResumed(this); // TGFEED: feeds and rules sync with Saved Messages
         if (dialogStoriesCell != null) {
             dialogStoriesCell.onResume();
         }

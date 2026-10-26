@@ -4,6 +4,7 @@ import org.telegram.messenger.BaseController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.UserConfig;
 import org.unofficial.telegramfeed.core.Feed;
+import org.unofficial.telegramfeed.core.FeedsConfig;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -106,6 +107,7 @@ public class FeedsController extends BaseController {
         feeds.add(feed);
         storage.saveFeed(feed);
         changed();
+        SavedMessagesSync.getInstance(currentAccount).localChanged();
         return feed;
     }
 
@@ -116,6 +118,7 @@ public class FeedsController extends BaseController {
         }
         storage.saveFeed(feed);
         changed();
+        SavedMessagesSync.getInstance(currentAccount).localChanged();
     }
 
     /** Deletes the feed and the rules it scopes. */
@@ -130,6 +133,20 @@ public class FeedsController extends BaseController {
         storage.deleteFeed(feedId);
         storage.saveOrder(feeds);
         changed();
+        SavedMessagesSync.getInstance(currentAccount).localChanged();
+    }
+
+    /** Replaces every feed and rule with the config's (Saved Messages sync); not a local change. */
+    void replaceAll(FeedsConfig config) {
+        feeds.clear();
+        for (Feed feed : config.feeds) {
+            feeds.add(new Feed(feed));
+        }
+        Feed.renumber(feeds);
+        loaded = true;
+        storage.replaceAll(config);
+        RulesController.getInstance(currentAccount).replaceRules(config.rules);
+        changed();
     }
 
     private void changed() {
@@ -143,6 +160,7 @@ public class FeedsController extends BaseController {
         loaded = false;
         loading = false;
         storage.cleanup();
+        SavedMessagesSync.getInstance(currentAccount).cleanup();
         changed();
     }
 }

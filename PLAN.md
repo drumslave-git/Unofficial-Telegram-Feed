@@ -17,7 +17,6 @@ The fork of the official Telegram Android client (DrKLO/Telegram, 12.10.6) that 
 ## Later
 
 - [ ] L-1 Google Play listing.
-- [ ] L-2 Google Drive sync of feeds and rules, as in the Flutter app.
 - [ ] L-3 Instant rules: a foreground service keeps the connection open while any rule is instant, so posts of muted channels notify at once.
 - [ ] L-4 AI semantic rules through an OpenAI-compatible endpoint.
 - [ ] L-5 Feeds and rules on the app icon's badge count.

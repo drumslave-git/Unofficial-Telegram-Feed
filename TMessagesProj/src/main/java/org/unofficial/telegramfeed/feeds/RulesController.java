@@ -123,6 +123,7 @@ public class RulesController extends BaseController {
             }
             snapshotWaiters.clear();
         }
+        SavedMessagesSync.getInstance(currentAccount).onLoaded();
     }
 
     /**
@@ -219,6 +220,7 @@ public class RulesController extends BaseController {
         rules.add(rule);
         storage().saveRule(rule);
         changed();
+        SavedMessagesSync.getInstance(currentAccount).localChanged();
         return rule;
     }
 
@@ -233,6 +235,7 @@ public class RulesController extends BaseController {
         }
         storage().saveRule(rule);
         changed();
+        SavedMessagesSync.getInstance(currentAccount).localChanged();
     }
 
     public void deleteRule(long id) {
@@ -245,6 +248,7 @@ public class RulesController extends BaseController {
         ids.add(id);
         storage().deleteRules(ids);
         changed();
+        SavedMessagesSync.getInstance(currentAccount).localChanged();
     }
 
     /** Deletes the rules a feed scopes (the feed is being deleted); returns how many went. */
@@ -258,6 +262,7 @@ public class RulesController extends BaseController {
         if (!ids.isEmpty()) {
             storage().deleteRules(ids);
             changed();
+            SavedMessagesSync.getInstance(currentAccount).localChanged();
         }
         return ids.size();
     }
@@ -283,6 +288,16 @@ public class RulesController extends BaseController {
         Calendar when = Calendar.getInstance();
         when.setTimeInMillis(postDate * 1000L);
         return matcher.evaluateAlbum(getRules(), feedScopes(), channelId, parts, messageIds, postDate, when);
+    }
+
+    /** Replaces every rule with copies of these, which the storage already holds (Saved Messages sync). */
+    void replaceRules(List<Rule> replacement) {
+        rules.clear();
+        for (Rule rule : replacement) {
+            rules.add(new Rule(rule));
+        }
+        loaded = true;
+        changed();
     }
 
     private void changed() {

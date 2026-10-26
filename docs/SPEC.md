@@ -23,7 +23,8 @@ The official Telegram app for Android with three additions for people who follow
 | Read aloud | The device's text-to-speech, with the post's language detected per post; a banner under the action bar stops it, and so do volume down and a headset's pause. |
 | Pause | One bell-with-slash button in the chat list's action bar silences every rule and the speech until it is pressed again, across restarts. |
 | Stories | A device-wide switch, off at first, hides every trace of stories: the stories bar, the archive's stories, profile rings and tabs, story notifications, reposting and sharing to stories, the stories camera, and the loading of stories at all. |
-| Storage | Feeds and rules are stored locally per account in the app's own SQLite file, separate from Telegram's database. No sync. |
+| Storage | Feeds and rules are stored locally per account in the app's own SQLite file, separate from Telegram's database. |
+| Sync | An account's feeds and rules are kept in one JSON file in its Saved Messages, always on. The app writes it a few seconds after every change by replacing the file of the same message; it reads it when the chat list opens and whenever another device's edit arrives, and the newer of the two replaces the other whole. A device that never synced and already has feeds or rules asks whether to use the copy, keep its own or merge both. Device-wide settings are not synced. |
 | Push | Telegram's push through the Flutter app's Firebase project. Telegram pushes only unmuted channels, so a channel with rules has to be unmuted in Telegram. |
 | Interface language | The fork's own strings are in English and Ukrainian; Telegram's strings come in every language Telegram has. |
 | Distribution | APKs on GitHub Releases, Google Play later. |
@@ -87,6 +88,13 @@ The primary user follows 20 to 200 Telegram channels (news, niche communities, a
 - Every rule notification carries "Listen", which reads the posts it lists that were not read aloud yet, and all of them when every one was; while one of its posts is read or waits, the action is "Stop" instead. Swiping the notification away and "Clear all" stop its posts.
 - Settings, in the "Read aloud" screen of the fork's settings section: speed, pitch, maximum length, language when detection fails, a preview, and voices listed by language, each with a play button; "Add language" picks another from a searchable list, and every other language uses the phone's default voice.
 
+### Sync
+
+- My feeds and rules live in a file in my Saved Messages, so they survive a reinstall and follow my account to every device that runs the app. The app keeps the file up to date by itself after every change; the message's caption says so.
+- After I log in on a new device or reinstall, my feeds and rules come back as soon as the chat list opens. A change on one device shows on another as soon as the other gets the edited message.
+- If a device that never synced already has feeds or rules of its own and the copy differs, a dialog shows how many feeds and rules each has and lets me use the copy, keep this device's or merge both; merging leaves out the feeds and rules that are identical.
+- In Settings, "Sync with Saved Messages" in the fork's section shows when the device last synced, "Syncing…", "Failed" or "Choose"; a tap syncs at once or shows the pending choice.
+
 ## 4. Screens
 
 1. **Chat list**: the official app's, with the "Feeds" tab in its tab bar, the pause button in its action bar, feed tags on channel rows and "Add to feed" in a channel row's long-press menu.
@@ -95,11 +103,11 @@ The primary user follows 20 to 200 Telegram channels (news, niche communities, a
 4. **Feed timeline**: the posts of the feed's channels drawn with the official app's message cells in the group layout, the "Unread posts" divider, day labels and the floating day, the button to the newest posts, the post menu, selection, the viewer, the search bar with its list and chips.
 5. **Feed info**: the feed's name and channels, its rules, and the shared media tabs over all its channels.
 6. **Rules list** and **rule editor**: name and switch, channel, optional feed, the condition as a builder or as text, the dry run, priority, read-aloud, schedule.
-7. **Settings**: the "Unofficial Telegram Feed" section before Chat Settings with "Hide stories", "Rules" and "Read aloud"; the "Rules" block and "Count unread posts" in Notifications and Sounds; "Rules" in a channel's profile, notification settings and ⋮ menu.
+7. **Settings**: the "Unofficial Telegram Feed" section before Chat Settings with "Hide stories", "Rules", "Read aloud" and "Sync with Saved Messages"; the "Rules" block and "Count unread posts" in Notifications and Sounds; "Rules" in a channel's profile, notification settings and ⋮ menu.
 
 ## 5. Out of scope
 
 - Everything the official app does is left as it is: chats, groups, calls, folders, Premium, themes, settings.
-- Syncing feeds and rules between devices, instant rules through a foreground service, AI semantic rules, and feeds or rules on the app icon's badge count.
+- Instant rules through a foreground service, AI semantic rules, and feeds or rules on the app icon's badge count.
 - Feeds of anything but joined channels. The app never joins, leaves or searches for channels on a feed's behalf.
 - Rules on groups, bots and private chats.

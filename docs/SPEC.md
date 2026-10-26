@@ -67,6 +67,7 @@ The primary user follows 20 to 200 Telegram channels (news, niche communities, a
 - A rule has a name and a switch, a channel picked from the joined channels with a search, an optional feed whose filter limits it to the posts the feed shows (offered only when the channel is in a feed that has a filter), a priority, read-aloud and a schedule of weekdays and two times. The editor explains what each priority does; picking "urgent" opens Android's list of apps allowed through Do Not Disturb while the app is not allowed yet. A dry run over the channel's recent posts says how many posts it checked and would have matched. Leaving with unsaved changes asks first.
 - A channel with at least one enabled rule notifies only for posts a rule matches. A channel without rules notifies as the official app does.
 - A matching post notifies with the rule's name, grouped per channel as Telegram groups a chat. Silent goes to the tray only, normal pops up, urgent breaks through Do Not Disturb where Android permits; each priority has its own notification channel. When several rules match, the highest priority wins, and read-aloud happens if any matching rule asks for it.
+- On Samsung phones an urgent rule gets through Do Not Disturb only once the app is among the apps One UI's Do Not Disturb settings allow.
 - An edited post is not matched again and does not sound again.
 - Android has to allow notifications at all; the app asks for that when I save my first rule.
 - Notifications and Sounds has a "Rules" block with the sound and vibration of normal and of urgent rule notifications, applied at once.
@@ -78,6 +79,7 @@ The primary user follows 20 to 200 Telegram channels (news, niche communities, a
 - Telegram pushes only channels that are not muted in Telegram. Saving a rule for a muted channel offers to unmute it, and otherwise says the rule notifies only while the app is open.
 - Posts that came while the phone was off or offline are matched when the app connects again, unless I have read them by then. A rule notifies about posts newer than itself.
 - The rules screens ask to be let off battery optimisation.
+- Samsung's One UI puts apps to sleep ("Sleeping apps", "Deep sleeping apps"), and Telegram's push no longer wakes a sleeping app, so its rules stay silent while it is closed. With the app's battery use set to "Unrestricted" (Settings → Apps → Unofficial Telegram Feed → Battery) One UI leaves it awake and the rules keep working.
 
 ### Read aloud
 

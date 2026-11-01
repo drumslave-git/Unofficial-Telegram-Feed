@@ -4,18 +4,19 @@ A fork of the official Telegram app for Android (DrKLO/Telegram) with three addi
 
 ## Session start (mandatory)
 
-1. Read `PLAN.md`. Find the **Current phase** and **Next task** lines and any `[~]` tasks.
+1. Read the Kanban view (id 41) of the Vikunja project "Unofficial Telegram Feed" (project id 9) with the vikunja MCP, `fields` limited to bucket titles and the tasks' identifier, title, priority and labels. A task in "Doing" is in progress; its comments name the branch and what is left.
 2. Run `git log --oneline -20` to see what the last sessions did.
-3. Only then start work, on the task the user names or on **Next task** if they did not name one.
+3. Only then start work, on the task the user names or, if they did not name one, the task in "Doing", else the first task of "To-Do". Move the task to "Doing" when work on it starts.
 
 ## Session end (mandatory)
 
-1. Update `PLAN.md`: remove the finished task, add new ones, update **Current phase** and **Next task**. PLAN.md holds open work only.
-2. Commit with a conventional message (`feat:`, `fix:`, `docs:`, `chore:`, `spike:`), one commit per task. Include the task id as the scope, e.g. `feat(P2-2): feeds tab`. The type decides the release: `feat` and `fix` on `master` publish a new version by themselves (`docs/ARCHITECTURE.md`, Releases).
+1. Update Vikunja. The board's buckets are Backlog → To-Do → Doing → User validation required → Done. A finished task goes to "User validation required" with a comment on what changed and how the user checks it; only the user moves a task to "Done". A task left unfinished stays in "Doing" with a comment naming its branch and what is left. New work found (bugs, follow-ups) becomes a task in "Backlog".
+2. Commit with a conventional message (`feat:`, `fix:`, `docs:`, `chore:`, `spike:`), one commit per task. Include the Vikunja task identifier as the scope, e.g. `feat(UTF-7): feeds tab`. The type decides the release: `feat` and `fix` on `master` publish a new version by themselves (`docs/ARCHITECTURE.md`, Releases).
 3. Never leave work uncommitted at the end of a session.
 
 ## Rules
 
+- Tasks live in Vikunja, never in the repo: no plan files, TODO lists or task notes in markdown. The repo holds docs and stable information only. "To-Do" holds the work of the current release, "Backlog" the work after it. Labels: `release`, `upstream`, `feature`, `bug`, `decision`, `spike`.
 - Decisions are asked, never deferred. If something is undecided, ask the user with the question tool right away. Do not write "open question", "TBD", or "decide later" anywhere.
 - Emulator only. Never propose or attempt running on the user's personal phone. The `Pixel_10` AVD (Android 16, x86_64); the build recipe is in `docs/ARCHITECTURE.md`.
 - Telegram login on the emulator uses a spare real account on the production DC, never the user's main account. The user types the phone number and SMS code into the emulator; Claude never enters them.
@@ -32,7 +33,7 @@ A fork of the official Telegram app for Android (DrKLO/Telegram) with three addi
 
 Telegram's files are huge (`ChatActivity.java` has 47k lines), so one careless read costs more than a task's worth of edits, and a long session buries the details the next fix needs. These rules hold in every session.
 
-- One PLAN.md task per session. The session ends with the task's commit; the next task gets a new session. Two sessions never work in this checkout at once.
+- One Vikunja task per session. The session ends with the task's commit; the next task gets a new session. Two sessions never work in this checkout at once.
 - No file is read whole. `grep -n` first, then ranges of at most 150 lines. A file is not re-read after an edit. CodeGraph queries name the symbols and cap files at 4. `docs/ARCHITECTURE.md` is read by section: its headings first, then the section.
 - Builds go through `tool/build.sh` (`debug`, `release` or `ci`), which keeps gradle's output in a log and prints only the result, and they run in the background. `tool/ci.sh` is run as `tool/build.sh ci`.
 - Logcat is read filtered and tailed (`adb logcat -d | grep -E 'AndroidRuntime|<tag>' | tail -40`), never whole.

@@ -235,7 +235,7 @@ The remote `upstream` is https://github.com/DrKLO/Telegram.git. On every Telegra
 
 1. `git fetch upstream --tags` and `git merge <release tag>` on `master`.
 2. Resolve conflicts; every conflict in a Telegram file is at a `TGFEED` line or next to one.
-3. Update the version lines in `PLAN.md` and this file, rebuild with `tool/ci.sh`, and do a hands-on pass on the emulator: login, chat list, the Feeds tab, a feed, a rule notification, read aloud, the stories switch.
+3. Update the version line in section 1 of this file, rebuild with `tool/ci.sh`, and do a hands-on pass on the emulator: login, chat list, the Feeds tab, a feed, a rule notification, read aloud, the stories switch.
 4. Commit the merge as `chore: merge Telegram <version>`.
 
 ## 10. Tests and CI

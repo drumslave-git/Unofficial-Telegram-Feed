@@ -10,7 +10,6 @@ Everything else is the official app, unchanged. This app is not made by Telegram
 
 - [Product spec](docs/SPEC.md): what the app does.
 - [Architecture](docs/ARCHITECTURE.md): how it is built.
-- [Plan](PLAN.md): open work.
 
 ## Install
 

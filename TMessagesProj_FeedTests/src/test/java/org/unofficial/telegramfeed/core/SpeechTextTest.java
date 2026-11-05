@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
@@ -60,6 +61,41 @@ public class SpeechTextTest {
         assertTrue(out, out.endsWith(".… and more"));
         String words = String.join(" ", Collections.nCopies(50, "word"));
         assertEquals("word word word word word word… and more", SpeechText.prepare(words, null, 30, "link", "… and more", INTRO));
+    }
+
+    private static final String SIGNATURE = "\n\n👉 Kyiv News | Subscribe\nSend us news";
+
+    @Test
+    public void theSignatureMostOtherPostsEndWithGoes() {
+        List<String> others = Arrays.asList("Rain tomorrow." + SIGNATURE, "The bridge is closed.\nUse the tunnel." + SIGNATURE,
+                "", "A forwarded post without it", "Metro runs again.\n\n⚡ kyiv news | subscribe \n**Send us news**\n");
+        assertEquals("Power is back.\nIn every district.", SpeechText.withoutSignature("Power is back.\nIn every district." + SIGNATURE, others));
+        assertEquals("Power is back.", SpeechText.withoutSignature("Power is back.\n\nSend us news", others));
+        assertEquals("No signature here.\nAt all.", SpeechText.withoutSignature("No signature here.\nAt all.", others));
+        assertEquals("One line", SpeechText.withoutSignature("One line", others));
+        assertEquals(null, SpeechText.withoutSignature(null, others));
+        assertEquals("a\nb", SpeechText.withoutSignature("a\nb", null));
+    }
+
+    @Test
+    public void aSignatureNeedsThreePostsAndThreeInFive() {
+        String post = "Power is back." + SIGNATURE;
+        assertEquals(post, SpeechText.withoutSignature(post, Arrays.asList("Rain." + SIGNATURE, "Snow." + SIGNATURE)));
+        assertEquals(post, SpeechText.withoutSignature(post, Arrays.asList("Rain." + SIGNATURE, "Snow." + SIGNATURE, "Fog." + SIGNATURE,
+                "one", "two", "three")));
+        assertEquals("Power is back.", SpeechText.withoutSignature(post, Arrays.asList("Rain." + SIGNATURE, "Snow." + SIGNATURE, "Fog." + SIGNATURE,
+                "one", "two")));
+    }
+
+    @Test
+    public void aPostRepeatedWholeIsStillRead() {
+        String alert = "🔴 Air raid alert!\nGo to the shelter." + SIGNATURE;
+        String clear = "🟢 All clear." + SIGNATURE;
+        List<String> others = Arrays.asList(alert, clear, alert, clear, alert, clear);
+        assertEquals("🔴 Air raid alert!\nGo to the shelter.", SpeechText.withoutSignature(alert, others));
+        String bare = "Air raid alert!\nGo to the shelter.";
+        assertEquals("Air raid alert!", SpeechText.withoutSignature(bare, Arrays.asList(bare, bare, bare)));
+        assertEquals("Subscribe", SpeechText.withoutSignature("Subscribe", Arrays.asList("a\nSubscribe", "b\nSubscribe", "c\nSubscribe")));
     }
 
     @Test

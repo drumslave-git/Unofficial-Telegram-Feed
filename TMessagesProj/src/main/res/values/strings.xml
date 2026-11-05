@@ -190,6 +190,7 @@
     <string name="TgfeedKeepMuted">Keep muted</string>
     <string name="TgfeedBatteryBanner">While the phone sleeps, Android may hold back what the app does for a push, and some phones put the app to sleep: rules would then notify late or not at all. Allow the app to ignore battery optimisation so they keep working.</string>
     <string name="TgfeedTtsIntro">New post in %1$s.</string>
+    <string name="TgfeedTtsNext">Next post.</string>
     <string name="TgfeedTtsLink">link</string>
     <string name="TgfeedTtsMore">… and more</string>
     <string name="TgfeedReadAloudChannel">Read aloud</string>

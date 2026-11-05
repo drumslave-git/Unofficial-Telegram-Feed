@@ -1,14 +1,18 @@
 package org.unofficial.telegramfeed.core;
 
 import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The text a post is read aloud as: styled letters become plain ones, links become a word for
- * "link", mentions, emoji and formatting marks go, whitespace collapses, a long post is cut at a
- * sentence end or a word and marked as cut, and an introduction naming the channel goes first.
+ * The text a post is read aloud as: the channel's signature goes, styled letters become plain
+ * ones, links become a word for "link", mentions, emoji and formatting marks go, whitespace
+ * collapses, a long post is cut at a sentence end or a word and marked as cut, and an
+ * introduction naming the channel goes first.
  * The words it adds are given by the caller in the language of the voice. No Android dependencies.
  */
 public final class SpeechText {
@@ -50,6 +54,71 @@ public final class SpeechText {
             }
         }
         return out == null ? t : out.toString();
+    }
+
+    /** A signature is taken for one when at least this many of the channel's other posts end with it. */
+    private static final int SIGNATURE_MIN_POSTS = 3;
+
+    /**
+     * The post without its channel's signature: the ending lines that at least three and at least
+     * three in five of the channel's other posts end with too. Lines are compared without emoji,
+     * formatting marks and letter case, and empty lines do not count. A post that is nothing but
+     * such lines keeps its first one, so a post the channel repeats whole is still read.
+     *
+     * @param otherPosts the texts of the channel's other recent posts
+     */
+    public static String withoutSignature(String text, List<String> otherPosts) {
+        if (text == null || otherPosts == null) {
+            return text;
+        }
+        List<String> own = new ArrayList<>();
+        List<Integer> ends = new ArrayList<>();
+        int offset = 0;
+        for (String line : text.split("\n", -1)) {
+            String c = comparable(line);
+            if (!c.isEmpty()) {
+                own.add(c);
+                ends.add(offset + line.length());
+            }
+            offset += line.length() + 1;
+        }
+        int n = own.size();
+        if (n < 2) {
+            return text;
+        }
+        int[] sharing = new int[n]; // sharing[k]: the other posts that end with this post's last k lines
+        int others = 0;
+        for (String other : otherPosts) {
+            if (other == null) {
+                continue;
+            }
+            List<String> theirs = new ArrayList<>();
+            for (String line : other.split("\n", -1)) {
+                String c = comparable(line);
+                if (!c.isEmpty()) {
+                    theirs.add(c);
+                }
+            }
+            if (theirs.isEmpty()) {
+                continue;
+            }
+            others++;
+            for (int k = 1; k < n && k <= theirs.size() && own.get(n - k).equals(theirs.get(theirs.size() - k)); k++) {
+                sharing[k]++;
+            }
+        }
+        for (int k = n - 1; k >= 1; k--) {
+            if (sharing[k] >= SIGNATURE_MIN_POSTS && sharing[k] * 5 >= others * 3) {
+                return text.substring(0, ends.get(n - k - 1));
+            }
+        }
+        return text;
+    }
+
+    /** A line as signatures are compared: plain letters in lower case, no emoji or formatting marks. */
+    private static String comparable(String line) {
+        String t = MARKERS.matcher(withoutEmoji(plain(line))).replaceAll(" ");
+        return SPACE.matcher(t).replaceAll(" ").trim().toLowerCase(Locale.ROOT);
     }
 
     /**

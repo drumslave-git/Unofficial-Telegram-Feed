@@ -19,20 +19,31 @@ import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.LanguageDetector;
+import org.telegram.SQLite.SQLiteCursor;
 import org.telegram.messenger.LocaleController;
+import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
+import org.telegram.tgnet.ConnectionsManager;
+import org.telegram.tgnet.NativeByteBuffer;
+import org.telegram.tgnet.TLRPC;
 import org.unofficial.telegramfeed.core.SpeechText;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 
 /**
- * Reads posts aloud, one at a time and in the order they came, with Android's TextToSpeech. Each
- * post is introduced with its channel, in the post's language when it is English or Ukrainian and
- * in the interface language otherwise, and is spoken with a voice of its detected language. While
+ * Reads posts aloud, one at a time and in the order they came, with Android's TextToSpeech. A
+ * post is introduced with its channel, or with "Next post" when it follows a post of the same
+ * channel without the queue going idle in between, in the post's language when it is English or
+ * Ukrainian and in the interface language otherwise. It is read without the channel's signature
+ * and spoken with a voice of its detected language. While
  * speaking it holds a transient audio focus that lets other audio duck; a phone call or another
  * app taking the focus stops the post, which is read again from the start once the focus returns.
  * A media foreground service keeps the process speaking with the screen off or after a push.
@@ -47,8 +58,11 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
         public final int messageId;
         public final String channelTitle;
         final String text;
+        /** The text without the channel's signature. */
+        String body;
         String language;
         String spoken;
+        boolean preparing;
 
         Item(int account, long dialogId, int messageId, String channelTitle, String text) {
             this.account = account;
@@ -62,6 +76,11 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
     private static final long CALL_RETRY_MS = 3000;
     private static final long STOP_SETTLE_MS = 400;
     private static final String UNDETERMINED = "und";
+    /** How many of a channel's latest messages are looked at for its signature. */
+    private static final int SIGNATURE_POSTS = 40;
+    /** With fewer posts of a channel in the database, its latest ones are asked from the server. */
+    private static final int SIGNATURE_STORED_ENOUGH = 5;
+    private static final long SIGNATURE_WAIT_MS = 4000;
 
     private static volatile ReadAloudController instance;
 
@@ -80,10 +99,14 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
 
     private final ArrayDeque<Item> queue = new ArrayDeque<>();
     private final LinkedHashSet<String> taken = new LinkedHashSet<>();
+    /** The posts asked from the server for a channel's signature, by account_dialogId. */
+    private final HashMap<String, LinkedHashMap<Integer, String>> fetchedPosts = new HashMap<>();
     private TextToSpeech tts;
     private boolean ttsReady;
     private boolean ttsFailed;
     private Item current;
+    /** The channel of the post prepared last since the queue was idle, as account_dialogId. */
+    private String previousChannel;
     private boolean speaking;
     private AudioFocusRequest focusRequest;
     private PowerManager.WakeLock wakeLock;
@@ -290,7 +313,73 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
             speak(item);
             return;
         }
-        LanguageDetector.detectLanguage(SpeechText.plain(item.text), language -> AndroidUtilities.runOnUIThread(() -> {
+        if (item.preparing) {
+            return;
+        }
+        item.preparing = true;
+        MessagesStorage storage = MessagesStorage.getInstance(item.account);
+        storage.getStorageQueue().postRunnable(() -> {
+            LinkedHashMap<Integer, String> posts = storedPosts(item.account, item.dialogId);
+            TLRPC.Chat chat = posts.size() < SIGNATURE_STORED_ENOUGH ? storage.getChat(-item.dialogId) : null;
+            AndroidUtilities.runOnUIThread(() -> withPosts(item, posts, chat));
+        });
+    }
+
+    /**
+     * Goes on with the channel's other posts known. A channel with few posts in the database, as
+     * after a long time offline, has its latest ones asked from the server, once per process.
+     */
+    private void withPosts(Item item, LinkedHashMap<Integer, String> posts, TLRPC.Chat chat) {
+        if (item != current) {
+            return;
+        }
+        String channel = item.account + "_" + item.dialogId;
+        if (posts.size() >= SIGNATURE_STORED_ENOUGH || fetchedPosts.containsKey(channel) || chat == null) {
+            detectLanguage(item, posts);
+            return;
+        }
+        boolean[] went = new boolean[1];
+        Runnable go = () -> {
+            if (!went[0]) {
+                went[0] = true;
+                detectLanguage(item, posts);
+            }
+        };
+        TLRPC.TL_messages_getHistory req = new TLRPC.TL_messages_getHistory();
+        req.peer = MessagesController.getInputPeer(chat);
+        req.limit = SIGNATURE_POSTS;
+        ConnectionsManager.getInstance(item.account).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+            if (response instanceof TLRPC.messages_Messages) {
+                LinkedHashMap<Integer, String> fetched = new LinkedHashMap<>();
+                for (TLRPC.Message message : ((TLRPC.messages_Messages) response).messages) {
+                    if (!TextUtils.isEmpty(message.message)) {
+                        fetched.put(message.id, message.message);
+                    }
+                }
+                fetchedPosts.put(channel, fetched);
+                log("asked " + fetched.size() + " posts of " + item.dialogId + " for its signature");
+            }
+            AndroidUtilities.cancelRunOnUIThread(go);
+            go.run();
+        }));
+        AndroidUtilities.runOnUIThread(go, SIGNATURE_WAIT_MS);
+    }
+
+    /** Leaves the channel's signature out of the post and detects the language of the rest. */
+    private void detectLanguage(Item item, LinkedHashMap<Integer, String> posts) {
+        if (item != current) {
+            return;
+        }
+        LinkedHashMap<Integer, String> fetched = fetchedPosts.get(item.account + "_" + item.dialogId);
+        if (fetched != null) {
+            posts.putAll(fetched);
+        }
+        posts.remove(item.messageId);
+        item.body = SpeechText.withoutSignature(item.text, new ArrayList<>(posts.values()));
+        if (item.body.length() < item.text.length()) {
+            log("signature of " + (item.text.length() - item.body.length()) + " chars left out of " + item.dialogId + "/" + item.messageId);
+        }
+        LanguageDetector.detectLanguage(SpeechText.plain(item.body), language -> AndroidUtilities.runOnUIThread(() -> {
             item.language = language;
             prepareAndSpeak(item);
         }), e -> AndroidUtilities.runOnUIThread(() -> {
@@ -299,18 +388,53 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
         }));
     }
 
+    /** The texts of the channel's latest stored posts by message id. Storage queue. */
+    private static LinkedHashMap<Integer, String> storedPosts(int account, long dialogId) {
+        LinkedHashMap<Integer, String> texts = new LinkedHashMap<>();
+        SQLiteCursor cursor = null;
+        try {
+            cursor = MessagesStorage.getInstance(account).getDatabase().queryFinalized(String.format(Locale.US,
+                    "SELECT data FROM messages_v2 WHERE uid = %d ORDER BY mid DESC LIMIT %d", dialogId, SIGNATURE_POSTS));
+            while (cursor.next()) {
+                NativeByteBuffer data = cursor.byteBufferValue(0);
+                if (data != null) {
+                    TLRPC.Message message = TLRPC.Message.TLdeserialize(data, data.readInt32(false), false);
+                    data.reuse();
+                    if (message != null && !TextUtils.isEmpty(message.message)) {
+                        texts.put(message.id, message.message);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            FileLog.e(e);
+        } finally {
+            if (cursor != null) {
+                cursor.dispose();
+            }
+        }
+        return texts;
+    }
+
     private void prepareAndSpeak(Item item) {
         if (item != current) {
             return;
         }
         String introLanguage = "en".equals(item.language) || "uk".equals(item.language) ? item.language : interfaceLanguage();
-        item.spoken = SpeechText.prepare(item.text, item.channelTitle, ReadAloudSettings.getMaxChars(),
+        String channel = item.account + "_" + item.dialogId;
+        // A post that follows one of the same channel is not introduced with the channel again.
+        boolean follows = channel.equals(previousChannel);
+        String spoken = SpeechText.prepare(item.body, follows ? null : item.channelTitle, ReadAloudSettings.getMaxChars(),
                 SpokenWords.get(introLanguage, R.string.TgfeedTtsLink), SpokenWords.get(introLanguage, R.string.TgfeedTtsMore),
-                channel -> SpokenWords.get(introLanguage, R.string.TgfeedTtsIntro, channel));
-        if (item.spoken.isEmpty()) {
+                title -> SpokenWords.get(introLanguage, R.string.TgfeedTtsIntro, title));
+        if (spoken.isEmpty()) {
             current = null;
             next();
             return;
+        }
+        item.spoken = follows ? SpokenWords.get(introLanguage, R.string.TgfeedTtsNext) + " " + spoken : spoken;
+        previousChannel = channel;
+        if (follows) {
+            log(item.dialogId + "/" + item.messageId + " follows a post of its channel");
         }
         speak(item);
     }
@@ -394,6 +518,10 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
                 utteranceSerial++;
                 speaking = false;
                 tts.stop();
+                // Read again after a break, the post is introduced with its channel.
+                current.spoken = null;
+                current.preparing = false;
+                previousChannel = null;
                 AndroidUtilities.runOnUIThread(retry, CALL_RETRY_MS);
             }
         } else if (change == AudioManager.AUDIOFOCUS_GAIN && current != null && !speaking) {
@@ -516,6 +644,7 @@ public final class ReadAloudController implements NotificationCenter.Notificatio
 
     private void idle() {
         AndroidUtilities.cancelRunOnUIThread(retry);
+        previousChannel = null;
         releaseKeys();
         abandonFocus();
         ReadAloudService.stop();
